@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows10.0.22621.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <RootNamespace>Reshot.Recording</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Reshot.Core\Reshot.Core.csproj" />
+    <ProjectReference Include="..\Reshot.Capture\Reshot.Capture.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Media Foundation SinkWriter for hardware H.264 → MP4 (ARCHITECTURE §9). -->
+    <PackageReference Include="Vortice.MediaFoundation" Version="3.6.2" />
+    <!-- WASAPI loopback (system audio) + microphone capture. -->
+    <PackageReference Include="NAudio" Version="2.2.1" />
+  </ItemGroup>
+
+</Project>

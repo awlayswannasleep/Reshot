@@ -1,0 +1,76 @@
+# ==== Build output ====
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+publish/
+*.user
+*.suo
+
+# Release artifacts produced by build/build-release.ps1
+dist/
+
+# ==== Editors, IDEs and local tooling ====
+# Personal configuration: never useful to anyone else, and it leaks local paths.
+.vs/
+.idea/
+# VS Code: personal settings stay out, the shared extension list is worth keeping.
+.vscode/*
+!.vscode/extensions.json
+*.DotSettings.user
+*.cache
+.claude/
+.impeccable/
+.cursor/
+.aider*
+
+# ==== Test results ====
+[Tt]est[Rr]esults/
+*.trx
+*.coverage
+*.coverlet.json
+
+# ==== NuGet ====
+*.nupkg
+packages/
+
+# ==== Secrets and credentials ====
+# Nothing here should ever exist in the repo; the patterns are a safety net so a stray
+# key or token cannot be committed by accident.
+*.pfx
+*.p12
+*.snk
+*.pem
+*.key
+.env
+.env.*
+!.env.example
+secrets.json
+appsettings.local.json
+*.publishsettings
+
+# ==== Logs and local data ====
+# reshot writes its settings and logs to %AppData%\reshot, not here, but a stray copy
+# would contain local paths and device names.
+*.log
+logs/
+settings.json
+!src/reshot-tauri/**/tauri.conf.json
+
+# ==== Scratch and backups ====
+scratchpad/
+tmp/
+temp/
+*.bak
+*.orig
+*.rej
+*~
+
+# ==== OS ====
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+desktop.ini
+.DS_Store

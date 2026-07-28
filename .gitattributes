@@ -1,0 +1,9 @@
+# Normalize line endings. reshot is a Windows-only project, so text files use
+# CRLF in the working tree; Git stores them consistently.
+* text=auto eol=crlf
+
+# Binary assets — never touch.
+*.png binary
+*.ico binary
+*.jpg binary
+*.snk binary

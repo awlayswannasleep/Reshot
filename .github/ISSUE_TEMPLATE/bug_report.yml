@@ -1,0 +1,48 @@
+name: Баг
+description: Что-то работает не так
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: Что произошло
+      description: Что ты сделал и что получилось вместо ожидаемого.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Как повторить
+      placeholder: |
+        1. Нажать Home
+        2. Выделить область
+        3. ...
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Версия reshot
+      placeholder: '1.0.0'
+    validations:
+      required: true
+
+  - type: input
+    id: windows
+    attributes:
+      label: Версия Windows
+      description: '«Параметры» → «Система» → «О системе», строка «Сборка ОС»'
+      placeholder: 'Windows 11 23H2, сборка 22631.4317'
+    validations:
+      required: true
+
+  - type: textarea
+    id: log
+    attributes:
+      label: Лог
+      description: |
+        `%AppData%\reshot\logs\reshot.log` — последние строки за время сбоя.
+        Приложение живёт в трее, так что падение почти всегда оставляет там след.
+      render: text
