@@ -7,7 +7,7 @@ namespace Reshot.Recording;
 /// <summary>
 /// Standalone audio recorder: captures system and/or microphone audio via
 /// <see cref="AudioCaptureMixer"/> and encodes it to an M4A on a background thread.
-/// Independent of screen capture — the audio-recording tool.
+/// Independent of screen capture, the audio-recording tool.
 /// </summary>
 public sealed class AudioRecorder : IDisposable
 {

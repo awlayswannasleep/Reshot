@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use serde_json::{Map, Value};
 
-/// `%AppData%\reshot\settings.json` — the same file the C# app owns
+/// `%AppData%\reshot\settings.json`, the same file the C# app owns
 /// (`Reshot.Core.ReshotPaths.SettingsFile`). Both write pretty camelCase JSON.
 fn settings_file() -> PathBuf {
     let appdata = std::env::var("APPDATA").unwrap_or_default();
@@ -22,7 +22,7 @@ fn user_dir(leaf: &str) -> String {
 }
 
 /// Recursive object merge: values from `patch` win, keys only present in `base`
-/// survive. This is what keeps the settings window forward-compatible — the C#
+/// survive. This is what keeps the settings window forward-compatible, the C#
 /// side may add keys this UI has never heard of, and saving must not drop them.
 fn merge(base: &mut Value, patch: &Value) {
     match (base, patch) {
@@ -205,7 +205,7 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
     }
 
-    /// A corrupt file must not block saving — the C# side has the same policy.
+    /// A corrupt file must not block saving, the C# side has the same policy.
     #[test]
     fn save_recovers_from_corrupt_json() {
         let dir = std::env::temp_dir().join("reshot-merge-test-corrupt");

@@ -600,7 +600,7 @@ public partial class OverlayWindow : Window
         base.OnMouseLeftButtonDown(e);
 
         // HUD panels own their clicks. Buttons mark the event handled themselves, but
-        // plain surfaces (the settings strip, the panel's backdrop) do not — without
+        // plain surfaces (the settings strip, the panel's backdrop) do not, without
         // this the window would start a stroke and capture the mouse, so the strip
         // never saw its own MouseUp.
         if (IsOverChrome())
@@ -787,7 +787,7 @@ public partial class OverlayWindow : Window
     {
         CommitText();
 
-        // Picking a different tool folds the settings panel away — its contents
+        // Picking a different tool folds the settings panel away, its contents
         // belong to the tool that was active when it was opened.
         if (sub != _drawSub)
             CloseBrushPanel();
@@ -1320,7 +1320,7 @@ public partial class OverlayWindow : Window
                     case DrawSubTool.Eraser:
                     {
                         // Shapes/text are baked into the paint layer, so clearing paint
-                        // pixels erases them by touch — no whole-object removal, and the
+                        // pixels erases them by touch, no whole-object removal, and the
                         // effects layer is deliberately left untouched (that is the
                         // Filter Eraser's job). Global opacity + Hardness shape the erase.
                         using var cov = BuildEraseCoverage(region);
@@ -1498,7 +1498,7 @@ public partial class OverlayWindow : Window
         {
             Log.Error("OCR failed.", ex);
             _ocr = new OcrTextLayer(Array.Empty<OcrWord>());
-            ShowOcrHint("OCR failed — see log.");
+            ShowOcrHint("OCR failed, see the log.");
         }
         finally
         {
@@ -1534,7 +1534,7 @@ public partial class OverlayWindow : Window
         {
             System.Windows.Clipboard.SetText(text);
             var scope = _ocr.HasSelection ? "selection" : "all text";
-            ShowOcrHint($"Copied {scope} — {text.Length} chars.");
+            ShowOcrHint($"Copied {scope}, {text.Length} chars.");
         }
         catch (Exception ex)
         {
@@ -1824,7 +1824,7 @@ public partial class OverlayWindow : Window
         {
             var color = (Color)ColorConverter.ConvertFromString(hex);
 
-            // Square, inset-bevelled well — the same swatch the settings app draws.
+            // Square, inset-bevelled well, the same swatch the settings app draws.
             var swatch = new Border
             {
                 Background = new SolidColorBrush(color),
@@ -1847,7 +1847,7 @@ public partial class OverlayWindow : Window
 
     // Simple, predictable slider interaction: press anywhere on the track and the value
     // snaps to that point, then follows the cursor while held (no release needed), and
-    // stops on release. Done entirely by hand — pressing captures the mouse on the slider
+    // stops on release. Done entirely by hand, pressing captures the mouse on the slider
     // and drives Value straight from the cursor position, so there is no built-in Thumb
     // drag remembering a stale pre-jump origin.
     private void EnableSliderClickDrag(Slider slider)
@@ -1942,7 +1942,7 @@ public partial class OverlayWindow : Window
         Canvas.SetLeft(BrushPanel, x);
 
         // Seed the closed pose before animating. Untouched Canvas.Top / Height read back as
-        // NaN, which Animate treats as 0 — on the very first open of each tool that made the
+        // NaN, which Animate treats as 0, on the very first open of each tool that made the
         // panel fly in from the top of the screen instead of unfolding from under the strip.
         if (double.IsNaN(Canvas.GetTop(BrushPanel)))
             Canvas.SetTop(BrushPanel, stripClosed + SettingsStrip.Height);
@@ -2085,7 +2085,7 @@ public partial class OverlayWindow : Window
         }
         catch
         {
-            // Partial/invalid hex while typing — ignore until it parses.
+            // Partial/invalid hex while typing, ignore until it parses.
         }
     }
 
@@ -2444,7 +2444,7 @@ public partial class OverlayWindow : Window
             return;
         }
 
-        // Draw mode: RMB-hold picks a color (eyedropper). HUD chrome keeps priority —
+        // Draw mode: RMB-hold picks a color (eyedropper). HUD chrome keeps priority -
         // a right-click on a tab must open its flyout, not start the eyedropper.
         if (_tool == ToolMode.Draw && !IsOverChrome())
         {
@@ -2509,7 +2509,7 @@ public partial class OverlayWindow : Window
     /// <summary>
     /// Text-editing keys are intercepted here, not in OnKeyDown. PreviewKeyDown
     /// tunnels from the window down to whatever holds keyboard focus, so it runs
-    /// before a focused toolbar Button can consume Space/Enter as a click — which
+    /// before a focused toolbar Button can consume Space/Enter as a click, which
     /// is exactly why the earlier OnKeyDown handler never saw them (the Button ate
     /// the KeyDown and it never bubbled up to the window). Enter and Shift+Enter
     /// both insert a newline; the character keys still arrive via OnTextInput.
@@ -2560,7 +2560,7 @@ public partial class OverlayWindow : Window
         if (_textEditing is not null)
             return;
 
-        // While typing in the hex box, swallow shortcuts — but Escape still closes
+        // While typing in the hex box, swallow shortcuts, but Escape still closes
         // the palette (and returns focus to the overlay).
         if (Keyboard.FocusedElement is TextBox)
         {
@@ -2608,7 +2608,7 @@ public partial class OverlayWindow : Window
         switch (e.Key)
         {
             case Key.LeftShift or Key.RightShift:
-                // Shift toggles the brush panel while drawing (SPEC §6.5) — but not when
+                // Shift toggles the brush panel while drawing (SPEC §6.5), but not when
                 // it's acting as a modifier (e.g. Ctrl+Shift+Z).
                 if (_tool == ToolMode.Draw && !e.IsRepeat &&
                     !Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
@@ -2837,7 +2837,7 @@ public partial class OverlayWindow : Window
 
     /// <summary>
     /// True when p is on the bounding box's border band (within a tolerance of an
-    /// edge line) — the move zone. The interior is deliberately excluded so a new
+    /// edge line), the move zone. The interior is deliberately excluded so a new
     /// selection can be started inside an existing one.
     /// </summary>
     private static bool IsOnEdge(Rect b, Point p)
@@ -3006,7 +3006,7 @@ public partial class OverlayWindow : Window
         CloseFlyouts();
 
         // The panel is anchored to a toolbar that is no longer there, so it goes at
-        // once — animating it out against a vanished anchor would just look broken.
+        // once, animating it out against a vanished anchor would just look broken.
         _brushPanelOpen = false;
         _panelAnimating = false;
         BrushPanel.BeginAnimation(Canvas.TopProperty, null);
@@ -3131,7 +3131,7 @@ public partial class OverlayWindow : Window
 
     /// <summary>
     /// Left-click Audio: record everything (system + microphone). The recorder's default is
-    /// deliberately "capture it all" — narrowing it down is what the right-click picker is for.
+    /// deliberately "capture it all", narrowing it down is what the right-click picker is for.
     /// </summary>
     private void StartAudioWithDefaults()
     {
@@ -3176,7 +3176,7 @@ public partial class OverlayWindow : Window
         var separatorStyle = (Style)FindResource("HlSeparator");
         var syncing = false;
 
-        // "System audio" for the recorder, "Select all" for video — same toggle either way:
+        // "System audio" for the recorder, "Select all" for video, same toggle either way:
         // it selects every window, which is what the full system mix is.
         var system = new MenuItem
         {
@@ -3202,7 +3202,7 @@ public partial class OverlayWindow : Window
             var title = w.Title.Length > 42 ? w.Title[..42] + "…" : w.Title;
             var item = new MenuItem
             {
-                Header = $"{w.ProcessName} — {title}",
+                Header = $"{w.ProcessName}: {title}",
                 IsCheckable = true, StaysOpenOnClick = true, IsChecked = true, Tag = w.ProcessId,
             };
             item.Checked += (_, _) => SyncSystem();

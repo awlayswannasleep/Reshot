@@ -6,7 +6,7 @@ namespace Reshot.Core;
 /// </summary>
 public static class ReshotPaths
 {
-    /// <summary><c>%AppData%\reshot</c> — root of all persisted state.</summary>
+    /// <summary><c>%AppData%\reshot</c>, root of all persisted state.</summary>
     public static string AppDataDir { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "reshot");

@@ -1,63 +1,64 @@
-# Сборка релиза
+# Building a release
 
-Здесь лежит всё, что превращает исходники в файлы, которые можно приложить к релизу
-на GitHub.
+This folder holds everything that turns the sources into the files you attach to a GitHub
+release.
 
-| Файл | Что делает |
+| File | What it does |
 |---|---|
-| `build-release.ps1` | Собирает всё: тесты, приложение, окно настроек, архив, установщик, контрольные суммы |
-| `installer.iss` | Скрипт установщика для Inno Setup 6 (вызывается скриптом выше) |
+| `build-release.ps1` | Builds it all: tests, application, settings window, archive, installer, checksums |
+| `installer.iss` | Inno Setup 6 installer script (invoked by the script above) |
 
-## Что нужно поставить
+## What you need installed
 
-| Инструмент | Зачем | Обязательно |
+| Tool | Why | Required |
 |---|---|---|
-| [.NET 8 SDK](https://dotnet.microsoft.com/download) | Сборка приложения | да |
-| [Node.js 18+](https://nodejs.org/) и [Rust](https://rustup.rs/) | Окно настроек на Tauri | да, если не `-SkipSettings` |
-| [Inno Setup 6](https://jrsoftware.org/isdl.php) | Установщик | нет: без него соберётся только архив |
+| [.NET 8 SDK](https://dotnet.microsoft.com/download) | Building the application | yes |
+| [Node.js 18+](https://nodejs.org/) and [Rust](https://rustup.rs/) | The Tauri settings window | yes, unless you pass `-SkipSettings` |
+| [Inno Setup 6.3+](https://jrsoftware.org/isdl.php) | The installer | no: without it you still get the archive |
 
-## Запуск
+## Running it
 
 ```powershell
 pwsh build/build-release.ps1
 ```
 
-Версия берётся из `<Version>` в `Directory.Build.props`, так что для нового релиза
-достаточно поднять её там (и в `src/reshot-tauri/src-tauri/tauri.conf.json`,
-`package.json`, `Cargo.toml`, чтобы окно настроек не отставало).
+The version comes from `<Version>` in `Directory.Build.props`, so a new release only needs
+that bumped (along with `src/reshot-tauri/src-tauri/tauri.conf.json`, `package.json` and
+`Cargo.toml`, so the settings window does not fall behind).
 
-Полезные ключи:
+Useful switches:
 
 ```powershell
-pwsh build/build-release.ps1 -Version 1.0.1     # переопределить версию
-pwsh build/build-release.ps1 -SkipSettings      # не пересобирать Tauri (это долго)
+pwsh build/build-release.ps1 -Version 1.0.1     # override the version
+pwsh build/build-release.ps1 -SkipSettings      # do not rebuild Tauri, which is slow
 ```
 
-## Что получится
+## What comes out
 
-Всё складывается в `dist/` (папка в `.gitignore`):
+Everything lands in `dist/`, which is gitignored:
 
 ```
 dist/
-├── reshot/                                  промежуточная раскладка
-│   ├── reshot.exe                           приложение (self-contained)
-│   ├── reshot-tauri.exe                     окно настроек
+├── reshot/                                  staging layout
+│   ├── reshot.exe                           the application (self-contained)
+│   ├── reshot-tauri.exe                     the settings window
 │   ├── LICENSE
 │   └── README.md
-├── reshot-1.0.0-win-x64-portable.zip        портативная версия
-├── reshot-1.0.0-setup.exe                   установщик
-└── SHA256SUMS.txt                           контрольные суммы
+├── reshot-1.0.0-win-x64-portable.zip        portable build
+├── reshot-1.0.0-setup.exe                   installer
+└── SHA256SUMS.txt                           checksums
 ```
 
-## Что важно знать
+## Things worth knowing
 
-- **Оба exe должны лежать рядом.** Приложение ищет `reshot-tauri.exe` сначала рядом с
-  собой (`App.ResolveSettingsExe`); если его нет, пункт «Settings…» ничего не откроет.
-- **Окно настроек собирается только через `tauri build`.** Обычный `cargo build` даёт
-  dev-бинарник, который грузит интерфейс с `localhost:1420` и без dev-сервера показывает
-  пустую страницу.
-- **Запущенное приложение блокирует свой exe.** Скрипт сам закрывает `reshot.exe` и
-  `reshot-tauri.exe` перед сборкой.
-- **Тесты гоняются первыми.** Если они падают, упаковка не начинается.
-- Установщик ставится **в профиль пользователя**, без прав администратора: автозапуск
-  reshot всё равно живёт в `HKCU`, и установка от админа только рассинхронизировала бы права.
+- **Both executables must sit side by side.** The application looks for `reshot-tauri.exe`
+  next to itself first (`App.ResolveSettingsExe`); without it the "Settings…" entry opens
+  nothing.
+- **The settings window can only be built through `tauri build`.** A plain `cargo build`
+  produces a dev binary that loads its UI from `localhost:1420` and shows a blank page
+  without the dev server running.
+- **A running application locks its own executable.** The script closes `reshot.exe` and
+  `reshot-tauri.exe` before building.
+- **Tests run first.** If they fail, nothing is packaged.
+- The installer is **per user** and needs no administrator rights: reshot's autostart entry
+  lives in `HKCU` anyway, and an elevated install would only mismatch permissions.

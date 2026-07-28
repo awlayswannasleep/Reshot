@@ -10,7 +10,7 @@ namespace Reshot.Recording;
 /// the target fps into a <b>video-only</b> temp MP4, while an audio thread writes each
 /// source (system, microphone) to its <b>own</b> raw PCM file.
 ///
-/// Nothing is mixed during capture — <see cref="Finish"/> decides which tracks make it
+/// Nothing is mixed during capture, <see cref="Finish"/> decides which tracks make it
 /// into the final file, which is what lets the user pick tracks after recording. The
 /// audio clock starts when the first video frame arrives (and the buffers are flushed
 /// then) so the tracks line up.
@@ -262,7 +262,7 @@ public sealed class VideoRecorder : IDisposable
         var ok = Mp4Muxer.Mux(_tempVideoPath, tracks, Path);
         if (!ok)
         {
-            // Muxing failed — keep at least the silent video rather than losing the take.
+            // Muxing failed, keep at least the silent video rather than losing the take.
             try { File.Copy(_tempVideoPath, Path, overwrite: true); ok = File.Exists(Path); }
             catch (Exception ex) { Log.Error("Recorder: fallback copy failed", ex); }
         }

@@ -95,7 +95,7 @@ interface SelectOption {
 
 /**
  * Dropdown in the HL2 idiom: a raised button that opens an inset list whose
- * rows highlight in the accent colour. A native <select> is unusable here —
+ * rows highlight in the accent colour. A native <select> is unusable here -
  * its popup is drawn by the OS and cannot carry the bevel styling.
  */
 function buildSelect(
@@ -187,7 +187,7 @@ function bindHotkeyField(input: HTMLInputElement, apply: (token: string) => void
   input.addEventListener("keydown", (event) => {
     event.preventDefault();
     const key = mainKeyOf(event);
-    if (!key) return; // a bare modifier press — keep waiting for the real key
+    if (!key) return; // a bare modifier press, keep waiting for the real key
 
     const parts: string[] = [];
     if (event.ctrlKey) parts.push("Ctrl");
@@ -365,7 +365,7 @@ async function load() {
   const hotkeyInput = $<HTMLInputElement>("hotkey");
   hotkeyInput.value = draft.hotkey;
   // The Info tab quotes both hotkeys several times, so every chip has to follow a
-  // rebind — a shortcut reference that lies is worse than none.
+  // rebind, a shortcut reference that lies is worse than none.
   const infoHotkey = $<HTMLElement>("infoHotkey");
   const infoHotkeyAliases = document.querySelectorAll<HTMLElement>(".infoHotkeyAlias");
   const showCaptureHotkey = (token: string) => {

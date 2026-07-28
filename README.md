@@ -4,147 +4,147 @@
 
 # reshot
 
-**Резидентная утилита скриншотов и записи экрана для Windows.**
+**A resident screenshot and screen recording tool for Windows.**
 
-Живёт в трее и не тратит ни такта, пока её не позвали.
+It lives in the tray and burns no cycles until you call it.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-3C9898.svg)](LICENSE)
-[![Windows 10 1903+](https://img.shields.io/badge/Windows-10%201903%2B-3C9898.svg)](#системные-требования)
+[![Windows 10 2004+](https://img.shields.io/badge/Windows-10%202004%2B-3C9898.svg)](#requirements)
 [![.NET 8](https://img.shields.io/badge/.NET-8-3C9898.svg)](https://dotnet.microsoft.com/)
 
 </div>
 
 ---
 
-## Что это
+## What it is
 
-Нажимаешь горячую клавишу — reshot **мгновенно замораживает все мониторы** одним кадром.
-Выделяешь область любой формы, размечаешь её и отправляешь в буфер или в файл. Либо
-записываешь выделенное в видео со звуком.
+Press the hotkey and reshot **freezes every monitor at once** in a single frame. Select an
+area of any shape, annotate it, and send it to the clipboard or to a file. Or record the
+selected area to video with sound.
 
-Главный принцип: **ноль нагрузки в фоне**. Ни таймеров, ни опроса — только ожидание
-горячей клавиши. В простое это меньше 30 МБ памяти и ~0% процессора.
+The guiding rule is **zero background cost**. No timers, no polling, just a global hotkey
+waiting to fire. Idle, that means under 30 MB of memory and roughly 0% CPU.
 
-## Возможности
+## Features
 
-**Захват**
+**Capture**
 
-- Мгновенный снимок всех мониторов сразу, через Windows.Graphics.Capture
-- Выделение формой: прямоугольник, эллипс, треугольник, лассо, полигон
-- Несколько выделений одновременно (`Ctrl` + перетаскивание)
-- За пределами непрямоугольной формы — прозрачность, в том числе в буфере обмена
+- Instant snapshot of every monitor at once, through Windows.Graphics.Capture
+- Shaped selections: rectangle, ellipse, triangle, lasso, polygon
+- Several selections at once (`Ctrl` + drag)
+- Anything outside a non-rectangular shape becomes transparent, clipboard included
 
-**Разметка**
+**Annotation**
 
-- Кисть, фигуры, линии и стрелки, текст
-- Блюр и пикселизация с настраиваемой силой
-- Три ластика: обычный, абсолютный (до прозрачности) и для фильтров
-- Мягкое стирание в духе Photoshop: центр всегда на 100%, край — по настройке
-- Пипетка, полная HSV-палитра, 16 своотчей
-- История на 32 шага
-- У каждого инструмента свои размер, непрозрачность и цвет
+- Brush, shapes, lines and arrows, text
+- Blur and pixelation with adjustable strength
+- Three erasers: normal, absolute (down to transparency), and one for filters
+- Photoshop-style soft erasing: the centre always erases fully, the rim follows a setting
+- Eyedropper, full HSV picker, 16 swatches
+- 32 steps of undo
+- Every tool keeps its own size, opacity and colour
 
-**Текст с картинки (OCR)**
+**Text from an image (OCR)**
 
-- Распознавание встроенным движком Windows: офлайн, без моделей и без сети
-- Слова становятся выделяемыми прямо поверх кадра — тянешь мышью и копируешь
-- Режим AUTO гоняет русский и английский движки и склеивает результат построчно,
-  потому что один движок Windows OCR коверкает чужой алфавит
+- Recognition through the built-in Windows engine: offline, no models, no network
+- Recognised words become selectable straight over the frame, so you drag and copy
+- AUTO mode runs the Russian and English engines and merges them line by line, because a
+  single Windows OCR engine mangles the other alphabet
 
-**Запись**
+**Recording**
 
-- MP4 / H.264 с аппаратным кодированием (NVENC, AMF, QSV)
-- Запись области любой формы, а не только прямоугольника
-- Системный звук и микрофон пишутся **раздельно**, поэтому дорожки выбираются
-  уже после остановки записи
-- Звук отдельных приложений через Windows Process Loopback
-- Отдельный диктофон для записи только звука
+- MP4 / H.264 with hardware encoding (NVENC, AMF, QSV)
+- Records a selection of any shape, not just a rectangle
+- System audio and the microphone are captured **separately**, so the tracks are chosen
+  after the recording stops
+- Per-application sound through Windows Process Loopback
+- A standalone recorder for audio only
 
-**Оболочка**
+**Shell**
 
-- Радиальное меню по удержанию горячей клавиши: быстрая запись экрана, быстрый
-  диктофон, настройки
-- Оформление в духе Half-Life 2 / Source VGUI
-- Настройки, автозапуск, single instance
+- Radial menu on holding the hotkey: quick screen recording, quick audio, settings
+- Half-Life 2 / Source VGUI styling
+- Settings, autostart, single instance
 
-## Установка
+## Install
 
-Готовые сборки — на странице [Releases](https://github.com/reteren/reshot/releases).
+Prebuilt binaries live on the [Releases](https://github.com/reteren/reshot/releases) page.
 
-| Файл | Что это |
+| File | What it is |
 |---|---|
-| `reshot-<версия>-setup.exe` | Установщик. Ставится в профиль пользователя, без прав администратора |
-| `reshot-<версия>-win-x64-portable.zip` | Портативная версия: распакуй и запусти `reshot.exe` |
+| `reshot-<version>-setup.exe` | Installer. Installs per user, no administrator rights |
+| `reshot-<version>-win-x64-portable.zip` | Portable build: unpack and run `reshot.exe` |
 
-Среда .NET не нужна: сборка self-contained.
+No .NET runtime is required; the build is self-contained.
 
-> Приложение не подписано сертификатом, поэтому при первом запуске SmartScreen может
-> предупредить. Это ожидаемо: «Подробнее» → «Выполнить в любом случае». Проверить
-> целостность файла можно по `SHA256SUMS.txt` из релиза.
+> The application is not code signed, so SmartScreen may warn on first launch. That is
+> expected: "More info" then "Run anyway". You can verify the download against
+> `SHA256SUMS.txt` from the release.
 
-## Системные требования
+## Requirements
 
-- Windows 10 версии 2004 (сборка 19041) или новее, x64
-- Для записи звука отдельных приложений — Windows 11
-- Для распознавания русского текста — языковой пакет OCR
-  («Параметры» → «Язык» → «Русский» → «Компоненты» → «Распознавание текста»)
-- Мониторы с разным масштабированием DPI не поддерживаются
+- Windows 10 version 2004 (build 19041) or newer, x64
+- Windows 11 for per-application audio capture
+- A Windows OCR language pack for Russian text recognition
+  (Settings, Language, Russian, Optional features, Optical character recognition)
+- Monitors with different DPI scaling are not supported
 
-## Как пользоваться
+## Usage
 
-По умолчанию горячая клавиша — `Home`, перебиндивается в настройках.
+The default hotkey is `Home` and can be rebound in the settings.
 
-| Действие | Что происходит |
+| Action | What happens |
 |---|---|
-| Короткое нажатие | Экран замирает, начинается сессия захвата |
-| Удержание | Радиальное меню: быстрая запись, диктофон, настройки |
-| Во время записи | Останавливает запись и сохраняет файл |
+| Tap | The screen freezes and a capture session starts |
+| Hold | Radial menu: quick recording, audio recorder, settings |
+| While recording | Stops the recording and saves the file |
 
-Инструменты переключаются цифрами `1`–`0` по порядку тулбара. Полный список сочетаний —
-во вкладке **Info** окна настроек; она обновляется вместе с кодом.
+Tools are switched with the digits `1` to `0`, in toolbar order. The full list of shortcuts
+lives in the **Info** tab of the settings window, and it is kept in step with the code.
 
-## Сборка из исходников
+## Building from source
 
-Нужны [.NET 8 SDK](https://dotnet.microsoft.com/download), [Node.js 18+](https://nodejs.org/)
-и [Rust](https://rustup.rs/) (последние два — только для окна настроек).
+You need the [.NET 8 SDK](https://dotnet.microsoft.com/download), plus
+[Node.js 18+](https://nodejs.org/) and [Rust](https://rustup.rs/) for the settings window.
 
 ```powershell
-dotnet build reshot.sln -c Debug          # собрать решение
-dotnet test                               # прогнать тесты ядра
-dotnet run --project src/Reshot.App       # запустить (свернётся в трей)
+dotnet build reshot.sln -c Debug          # build the solution
+dotnet test                               # run the core tests
+dotnet run --project src/Reshot.App       # run it (minimises to the tray)
 ```
 
-Окно настроек — отдельное приложение на Tauri:
+The settings window is a separate Tauri application:
 
 ```powershell
 npm install --prefix src/reshot-tauri
 npm run tauri build --prefix src/reshot-tauri -- --no-bundle
 ```
 
-> Собирать настройки нужно именно так. Обычный `cargo build` даёт **dev**-бинарник,
-> который тянет интерфейс с локального dev-сервера и без него показывает пустую страницу.
+> Build the settings window exactly like that. A plain `cargo build` produces a **dev**
+> binary that loads its UI from the local dev server and shows a blank page without it.
 
-Все артефакты релиза (портативный архив, установщик, контрольные суммы) собирает один
-скрипт — подробности в [build/README.md](build/README.md):
+One script produces every release artifact (portable archive, installer, checksums). See
+[build/README.md](build/README.md):
 
 ```powershell
 pwsh build/build-release.ps1
 ```
 
-## Устройство
+## Layout
 
-| Проект | Назначение |
+| Project | Purpose |
 |---|---|
-| `src/Reshot.App` | WPF-оболочка: трей, хоткеи, оверлей, OCR, экспорт |
-| `src/Reshot.Core` | Ядро без UI: модель документа, история, настройки, хоткеи |
-| `src/Reshot.Capture` | Обёртка Windows.Graphics.Capture (кадр и живой поток) |
-| `src/Reshot.Recording` | MP4 и M4A через Media Foundation и NAudio, без ffmpeg |
-| `src/reshot-tauri` | Окно настроек: Tauri 2, Rust, TypeScript |
-| `tests/Reshot.Core.Tests` | Юнит-тесты ядра (xUnit) |
+| `src/Reshot.App` | WPF shell: tray, hotkeys, overlay, OCR, export |
+| `src/Reshot.Core` | UI-free core: document model, history, settings, hotkeys |
+| `src/Reshot.Capture` | Windows.Graphics.Capture wrapper (frozen frame and live stream) |
+| `src/Reshot.Recording` | MP4 and M4A through Media Foundation and NAudio, no ffmpeg |
+| `src/reshot-tauri` | Settings window: Tauri 2, Rust, TypeScript |
+| `tests/Reshot.Core.Tests` | Core unit tests (xUnit) |
 
-Подробнее: [ARCHITECTURE.md](ARCHITECTURE.md) — стек и обоснование решений,
-[SPEC.md](SPEC.md) — функциональная спецификация, [ROADMAP.md](ROADMAP.md) — план по фазам.
+Further reading: [ARCHITECTURE.md](ARCHITECTURE.md) for the stack and the reasoning behind
+it, [SPEC.md](SPEC.md) for the functional specification, [ROADMAP.md](ROADMAP.md) for the
+development plan.
 
-## Лицензия
+## License
 
 [MIT](LICENSE).

@@ -12,7 +12,7 @@ public static class SkiaInterop
 {
     /// <summary>
     /// Flattens a WPF geometry (in DIP) to an <see cref="SKPath"/> scaled into
-    /// physical pixels — used to clip brush strokes to the selection shape.
+    /// physical pixels, used to clip brush strokes to the selection shape.
     /// </summary>
     public static SKPath ToSkPath(WpfGeometry geometry, double scaleX, double scaleY)
     {
@@ -49,7 +49,7 @@ public static class SkiaInterop
     public static BitmapSource ToBitmapSource(SKBitmap bitmap)
     {
         var writeable = new WriteableBitmap(bitmap.Width, bitmap.Height, 96, 96, PixelFormats.Pbgra32, null);
-        // Both are premultiplied BGRA of the same size — a straight pixel copy.
+        // Both are premultiplied BGRA of the same size, a straight pixel copy.
         writeable.WritePixels(
             new Int32Rect(0, 0, bitmap.Width, bitmap.Height),
             bitmap.GetPixels(),

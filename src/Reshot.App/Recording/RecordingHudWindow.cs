@@ -20,7 +20,7 @@ namespace Reshot.App.Recording;
 /// <summary>
 /// The on-screen recording HUD (SPEC §9): a full-virtual-desktop, click-through,
 /// topmost window that draws corner brackets around the recorded area and a small
-/// top-right indicator (red dot + elapsed timer + resolution). Purely visual — all
+/// top-right indicator (red dot + elapsed timer + resolution). Purely visual, all
 /// mouse input passes through to the live screen beneath.
 /// </summary>
 public sealed class RecordingHudWindow : Window
@@ -55,7 +55,7 @@ public sealed class RecordingHudWindow : Window
         Focusable = false;
         ShowActivated = false;
 
-        // Cover the whole virtual desktop (assumes uniform DPI — mixed DPI is out of scope).
+        // Cover the whole virtual desktop (assumes uniform DPI, mixed DPI is out of scope).
         Left = SystemParameters.VirtualScreenLeft;
         Top = SystemParameters.VirtualScreenTop;
         Width = SystemParameters.VirtualScreenWidth;

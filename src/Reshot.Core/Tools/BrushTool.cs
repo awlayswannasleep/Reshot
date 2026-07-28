@@ -24,7 +24,7 @@ public sealed class BrushSettings
 
 /// <summary>
 /// A single freehand brush stroke. Points accumulate into one path so the stroke
-/// is painted exactly once on commit — overlapping parts of a semi-transparent
+/// is painted exactly once on commit, overlapping parts of a semi-transparent
 /// stroke don't build up (Photoshop-like). Pure Skia, no UI.
 /// </summary>
 public sealed class BrushStroke

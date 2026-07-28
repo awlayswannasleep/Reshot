@@ -1,10 +1,10 @@
-# Участие в разработке
+# Contributing
 
-## Что понадобится
+## What you need
 
 - [.NET 8 SDK](https://dotnet.microsoft.com/download), Windows 10 2004+ x64
-- [Node.js 18+](https://nodejs.org/) и [Rust](https://rustup.rs/) — только если трогаешь
-  окно настроек (`src/reshot-tauri`)
+- [Node.js 18+](https://nodejs.org/) and [Rust](https://rustup.rs/), but only if you touch
+  the settings window (`src/reshot-tauri`)
 
 ```powershell
 dotnet build reshot.sln -c Debug
@@ -12,44 +12,44 @@ dotnet test
 dotnet run --project src/Reshot.App
 ```
 
-## Устройство проекта
+## How the project is laid out
 
-| Проект | Назначение |
+| Project | Purpose |
 |---|---|
-| `src/Reshot.Core` | Ядро **без UI**: модель документа, история, настройки, хоткеи |
-| `src/Reshot.Capture` | Единственное место, где живёт Windows.Graphics.Capture |
-| `src/Reshot.Recording` | MP4 и M4A через Media Foundation и NAudio |
-| `src/Reshot.App` | WPF-оболочка: трей, оверлей, OCR, экспорт |
-| `src/reshot-tauri` | Окно настроек: Tauri 2, Rust, TypeScript |
+| `src/Reshot.Core` | The core, **with no UI**: document model, history, settings, hotkeys |
+| `src/Reshot.Capture` | The only place Windows.Graphics.Capture lives |
+| `src/Reshot.Recording` | MP4 and M4A through Media Foundation and NAudio |
+| `src/Reshot.App` | WPF shell: tray, overlay, OCR, export |
+| `src/reshot-tauri` | Settings window: Tauri 2, Rust, TypeScript |
 
-Границы, которые стоит держать:
+Boundaries worth keeping:
 
-1. **`Reshot.Core` не знает про WPF.** Благодаря этому модель документа, история и
-   настройки покрыты юнит-тестами без окон.
-2. **Windows.Graphics.Capture живёт только в `Reshot.Capture`.** Остальной код видит
-   интерфейс `IScreenCaptureService`.
-3. **`settings.json` общий** для C# и окна настроек. Запись только слиянием, иначе одна
-   сторона затрёт ключи другой.
+1. **`Reshot.Core` knows nothing about WPF.** That is what lets the document model, the
+   history and the settings be unit tested without any windows.
+2. **Windows.Graphics.Capture lives only in `Reshot.Capture`.** The rest of the code sees
+   the `IScreenCaptureService` interface.
+3. **`settings.json` is shared** between the C# app and the settings window. Write it by
+   merging, otherwise one side wipes keys belonging to the other.
 
-## Стиль
+## Style
 
-- Комментарии объясняют **почему**, а не пересказывают код
-- Документация и комментарии в репозитории — по-русски, интерфейс приложения — по-английски
-- Новая логика в `Reshot.Core` — с тестами (`tests/Reshot.Core.Tests`)
+- Comments explain **why**, they do not restate the code
+- Documentation, comments and the user interface are all in English
+- New logic in `Reshot.Core` comes with tests (`tests/Reshot.Core.Tests`)
 
-## Проверка изменений
+## Verifying changes
 
-Запущенный `reshot.exe` держит свой файл, поэтому перед пересборкой его нужно закрыть:
+A running `reshot.exe` holds a lock on its own file, so close it before rebuilding:
 
 ```powershell
 taskkill /IM reshot.exe /F
 ```
 
-Оверлей — полноэкранное окно, и запускать его ради каждой проверки неудобно. То, что
-можно проверить без него, лучше проверять без него: логика ядра закрыта юнит-тестами, а
-разметку HUD можно отрисовать за пределами экрана, собрав кадр с
-`VirtualLeft`/`VirtualTop = -30000`.
+The overlay is a fullscreen window and launching it for every check is disruptive.
+Whatever can be verified without it should be: the core logic is covered by unit tests,
+and the HUD layout can be rendered off screen by building a frame with
+`VirtualLeft` and `VirtualTop` set to -30000.
 
-## Сборка релиза
+## Building a release
 
-См. [build/README.md](build/README.md).
+See [build/README.md](build/README.md).

@@ -22,7 +22,7 @@ public partial class SettingsWindow : Window
 
     public AppSettings? Result { get; private set; }
 
-    /// <summary>Raised by "Apply" — the caller applies the settings while the window stays open.</summary>
+    /// <summary>Raised by "Apply", the caller applies the settings while the window stays open.</summary>
     public event Action<AppSettings>? Applied;
 
     public SettingsWindow(AppSettings current)
@@ -226,7 +226,7 @@ public partial class SettingsWindow : Window
 
         var token = KeyToToken(key);
         if (token is null)
-            return; // unmapped key — keep waiting
+            return; // unmapped key, keep waiting
 
         var parts = new List<string>(4);
         var mods = Keyboard.Modifiers;
@@ -335,5 +335,5 @@ public partial class SettingsWindow : Window
     }
 
     private void Warn(string message) =>
-        System.Windows.MessageBox.Show(this, message, "reshot — Settings", MessageBoxButton.OK, MessageBoxImage.Warning);
+        System.Windows.MessageBox.Show(this, message, "reshot: Settings", MessageBoxButton.OK, MessageBoxImage.Warning);
 }

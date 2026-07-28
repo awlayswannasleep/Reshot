@@ -2,7 +2,7 @@
 # CRLF in the working tree; Git stores them consistently.
 * text=auto eol=crlf
 
-# Binary assets — never touch.
+# Binary assets, never touch.
 *.png binary
 *.ico binary
 *.jpg binary

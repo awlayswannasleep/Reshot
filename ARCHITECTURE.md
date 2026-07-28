@@ -1,155 +1,189 @@
-# RESHOT — Архитектура
+# reshot architecture
 
-## 1. Стек: C# / .NET 8
+## 1. Stack: C# / .NET 8
 
-**Решение: C# вместо Rust.** Причина — разработка ведётся в паре с Claude без глубокого опыта программирования. C# выигрывает по всем критериям, важным именно для этого сценария:
+**Decision: C# rather than Rust.** The project is written together with an AI assistant by
+an author without deep programming experience, and C# wins on every criterion that matters
+for that situation:
 
-- Понятные ошибки компилятора и рантайма, которые легко скармливать обратно Claude; в Rust борьба с borrow checker для новичка растягивает каждую фазу в разы.
-- Огромное количество примеров в открытом коде: **ShareX** (C#) — практически reference implementation половины reshot, можно подглядывать решения.
-- Первоклассный доступ к Windows API: Windows.Graphics.Capture, WASAPI, Media Foundation, реестр, трей — всё либо в BCL, либо в одном NuGet-пакете.
-- Производительности хватает с запасом: кадр заморожен, редактирование — это операции над одним битмапом, а не GPU-рендер каждый кадр.
+- Compiler and runtime errors are readable and easy to feed back into the assistant. In
+  Rust, fighting the borrow checker as a beginner stretches every phase severalfold.
+- There is a huge amount of open source to learn from. **ShareX** (C#) is effectively a
+  reference implementation of half of reshot.
+- First-class access to the Windows API: Windows.Graphics.Capture, WASAPI, Media
+  Foundation, the registry, the tray. All of it is either in the BCL or one NuGet away.
+- Performance is more than sufficient. The frame is frozen, so editing is operations on a
+  single bitmap rather than a GPU render every frame.
 
-Ограничение принимаем честно: ~40–60 МБ RAM при активной сессии редактирования и ~25–30 МБ в фоне. Для утилиты это нормально; цель «<30 МБ в простое» достижима (без загрузки WPF до первого вызова — см. §7).
+The tradeoff is accepted honestly: roughly 40 to 60 MB of RAM during an active editing
+session and 25 to 30 MB in the background. That is normal for a utility, and the "under
+30 MB idle" goal is reachable because WPF is not loaded until the first call (see §7).
 
-### Компоненты
+### Components
 
-| Слой | Технология | Зачем |
+| Layer | Technology | Why |
 |---|---|---|
-| Runtime | .NET 8 (self-contained, win-x64) | Один установщик, без требования ставить рантайм |
-| Оверлей и UI | WPF (borderless topmost window на каждый этап) | Зрелый, гибкий, тёмную тему стилизуем свободно |
-| Канвас редактора | **SkiaSharp** (`SKElement` / запись в `WriteableBitmap`) | Кисти, альфа, блюр, пикселизация, произвольные контуры, текст — всё в одной библиотеке |
-| Захват экрана | **Windows.Graphics.Capture** (CsWinRT / `ScreenCapture.NET`) | Современный API: захватывает игры и защищённые окна, быстрый, без GDI-артефактов |
-| Глобальный хоткей | `RegisterHotKey` (user32, P/Invoke) | Нулевая фоновая нагрузка: сообщение прилетает в message loop |
-| Трей | `NotifyIcon` (WinForms interop) или `H.NotifyIcon` | Стандарт |
-| Настройки | `System.Text.Json` → `%AppData%\reshot\settings.json` | |
-| Автообновление | **Velopack** (наследник Squirrel.Windows) + GitHub Releases | Дельта-апдейты, простая интеграция |
-| Видео (поздняя фаза) | Media Foundation `SinkWriter` (H.264 HW-encoder: NVENC/AMF/QSV) + WASAPI (loopback + mic) через NAudio | Без бандла ffmpeg (−80 МБ) |
+| Runtime | .NET 8 (self-contained, win-x64) | One installer, no runtime prerequisite |
+| Overlay and UI | WPF (a borderless topmost window per stage) | Mature, flexible, easy to style dark |
+| Editor canvas | **SkiaSharp** (`SKElement`) | Brushes, alpha, blur, pixelation, arbitrary paths and text, all in one library |
+| Screen capture | **Windows.Graphics.Capture** (CsWinRT) | Modern API: captures games and protected windows, fast, free of GDI artefacts |
+| Global hotkey | `RegisterHotKey` (user32, P/Invoke) | Zero background cost: the message arrives in the message loop |
+| Tray | `NotifyIcon` (WinForms interop) | Standard |
+| Settings | `System.Text.Json` writing `%AppData%\reshot\settings.json` | Shared with the settings window |
+| Settings window | **Tauri 2** (Rust + TypeScript), a separate process | Styling the Source-like dialog in HTML and CSS beats fighting WPF for it |
+| Video | Media Foundation `SinkWriter` (hardware H.264: NVENC, AMF, QSV) plus WASAPI through NAudio | No bundled ffmpeg, which saves about 80 MB |
+| Text recognition | `Windows.Media.Ocr` | Offline, no models to ship, already part of the OS |
 
-### Ключевые NuGet
+### Key NuGet packages
 
 ```
 SkiaSharp
 SkiaSharp.Views.WPF
-Velopack
-NAudio                  (фаза видео)
-H.NotifyIcon.Wpf        (опционально)
+Vortice.Direct3D11        (capture)
+Vortice.MediaFoundation   (recording)
+NAudio                    (audio)
 ```
 
-## 2. Структура решения
+## 2. Solution layout
 
 ```
 reshot/
 ├── src/
-│   ├── Reshot.App/            # WPF: точка входа, трей, хоткей, оверлей, настройки UI
-│   │   ├── Overlay/           # Окно сессии, тулбар, панели инструментов
-│   │   ├── Tray/
-│   │   └── Settings/
-│   ├── Reshot.Core/           # Без UI-зависимостей: модель документа, инструменты, undo
+│   ├── Reshot.App/            WPF: entry point, tray, hotkeys, overlay, OCR, export
+│   │   ├── Overlay/           session window, toolbar, tool panels
+│   │   ├── Ocr/               recognition and the selectable text layer
+│   │   ├── Radial/            hold-to-open quick menu
+│   │   ├── Recording/         recording HUD, audio track prompt
+│   │   └── Tray/
+│   ├── Reshot.Core/           no UI dependencies: document model, tools, history
 │   │   ├── Document/
 │   │   ├── Tools/
 │   │   ├── History/
 │   │   └── Export/
-│   ├── Reshot.Capture/        # Windows.Graphics.Capture обёртка
-│   └── Reshot.Recording/      # (фаза видео) MF + WASAPI
-├── docs/                      # эти файлы
+│   ├── Reshot.Capture/        Windows.Graphics.Capture wrapper
+│   ├── Reshot.Recording/      Media Foundation plus WASAPI
+│   └── reshot-tauri/          settings window (Tauri 2)
+├── build/                     release scripts and the installer
 └── tests/Reshot.Core.Tests/
 ```
 
-Правило: **Reshot.Core не знает про WPF.** Все инструменты и модель документа тестируются без окон. Это же спасёт, если когда-нибудь «мне лень» про кроссплатформенность передумается.
+Rule: **Reshot.Core knows nothing about WPF.** Every tool and the document model are
+testable without windows.
 
-## 3. Модель документа
+## 3. Document model
 
-Сессия редактирования = `CaptureDocument`:
+An editing session is a `CaptureDocument`:
 
 ```
 CaptureDocument
-├── SourceBitmap          — замороженный кадр всех мониторов (immutable)
-├── Selections[]          — активные выделения (обычно 1, с Ctrl — несколько)
-│   └── Selection { ShapePath (SKPath), BoundingBox, Transform }
-├── Layers (порядок рендера снизу вверх):
-│   1. BaseLayer          — SourceBitmap + маска AbsoluteEraser (стирание до альфы)
-│   2. EffectsLayer       — блюр/пикселизация (растр + маска Filter Eraser)
-│   3. PaintLayer         — растровые мазки кисти (перманент; трётся Eraser)
-│   4. VectorLayer        — объекты: фигуры, текст, стрелки (движимые)
-└── History               — undo-стек, 32 шага
+├── base frame            the frozen capture of every monitor (immutable, held by the app)
+├── EffectsLayer          blur and pixelation over the untouched base
+├── PaintLayer            brush strokes plus rasterised shapes and text
+└── AbsoluteMask          coverage of the Absolute Eraser, punched out on export
 ```
 
-Почему так:
+Why it is split this way:
 
-- **Filter Eraser (3.2)** обязан возвращать оригинальные пиксели → эффекты не могут «вжигаться» в базу, им нужен свой слой поверх нетронутого оригинала.
-- **Eraser (3)** стирает только пользовательское рисование → PaintLayer отдельно от базы.
-- **Absolute Eraser (3.1)** стирает всё до прозрачности → альфа-маска, применяемая к финальной композиции (или к BaseLayer + очистка верхних слоёв в зоне мазка).
-- **Фигуры/текст движимы, кисть — нет** → вектор и растр разнесены. VectorLayer рендерится при композиции; выбор объекта — hit-test по контурам.
+- **The Filter Eraser must return the original pixels**, so effects cannot be burnt into
+  the base. They need their own layer over an untouched original.
+- **The normal Eraser only removes user drawing**, so PaintLayer is separate from the base.
+- **The Absolute Eraser erases everything down to transparency**, which is an alpha mask
+  applied to the final composite.
 
-Композиция на экспорт: `flatten(Base → Effects → Paint → Vector)` → обрезка по union всех Selection.ShapePath → всё вне контуров = прозрачность → PNG.
+Shapes and text are **baked into PaintLayer on commit**, so the eraser treats them exactly
+like brush strokes, pixel by pixel. An earlier design kept a movable vector layer; it was
+dropped because "erase part of an arrow" is worth more than "move an arrow afterwards".
 
-## 4. Ластики: модель силы (Photoshop hardness)
+Export composition: base, then effects, then paint, cropped to the union of the selection
+paths, with everything outside those paths transparent.
 
-Мазок ластика — штамп с радиальным градиентом альфы:
+## 4. Erasers: the strength model
 
-```
-alpha(r) = 1.0                    при r ≤ r_core (центр, всегда 100%)
-alpha(r) = falloff(r, hardness)   при r_core < r ≤ R
-```
-
-- `hardness = 1.0` → ступенька: вся зона стирает полностью (жёсткий круг с референс-скрина).
-- `hardness = 0.0` → гауссово затухание от центра к краю (мягкое пятно с референс-скрина).
-- Центральный пиксель стирает на 100% при любой силе.
-
-Реализация в Skia: `SKShader.CreateRadialGradient` + `SKBlendMode.DstOut` на целевой слой. Тот же движок используется кистью рисования (только blend-режим обычный) — один код, два инструмента.
-
-## 5. Undo/Redo
-
-Command-паттерн, стек 32.
-
-- Векторные операции (добавить/сдвинуть фигуру или текст, изменить выделение) — дёшево: храним сам объект/дельту.
-- Растровые операции (мазок кисти, ластика, эффекта) — храним **тайловые снапшоты**: слой бьётся на тайлы 256×256, в команду складываются копии только затронутых тайлов «до». Undo = вернуть тайлы. Это держит память в узде даже на 4K (полный снапшот слоя 4K = 33 МБ × 32 шага — недопустимо; тайлы мазка — сотни КБ).
-
-## 6. Захват и мультимонитор
-
-- По хоткею: **сразу захватываются все мониторы** (по одному `GraphicsCaptureItem` на дисплей), кадры складываются в единый битмап по координатам виртуального рабочего стола. Это обязательное условие для механики «Ctrl+A → Ctrl+A = все мониторы»: расширять выделение можно только если пиксели уже есть.
-- Оверлей — одно borderless-окно на весь виртуальный десктоп (или окно на монитор с общей моделью — решить в Фазе 1 по результатам теста с отрицательными координатами мониторов).
-- Захват защищённого контента: Windows.Graphics.Capture захватывает то, что разрешает система; для окон с DRM-флагом ОС может отдавать чёрное — это ограничение платформы, честно документируем.
-- Жёлтая рамка захвата Windows: отключается через `IsBorderRequired = false` (Win10 20H1+).
-
-## 7. «Ноль в фоне»: как это устроено
-
-- Фоновый процесс = message-only window + `RegisterHotKey` + трей. Никаких таймеров, поллинга, watcher'ов. CPU 0%, RAM минимальна.
-- WPF-оверлей **не создаётся при старте** — конструируется при первом хоткее (первый вызов ~на 100 мс дольше, дальше окно переиспользуется скрытым: показ/скрытие вместо создания/уничтожения, чтобы укладываться в бюджет 150 мс).
-- Все capture-ресурсы (D3D device, frame pool) освобождаются при закрытии сессии.
-
-## 8. Ввод и приоритеты (разруливание конфликтов)
-
-Единый роутер ввода в сессии, приоритет сверху вниз:
-
-1. Открытые панели/подменю тулбара (ПКМ по тулбару никогда не уходит в пипетку).
-2. Модификаторы контекста инструмента (`Shift`, `Ctrl` — по карте из SPEC §12).
-3. Активный инструмент.
-
-Состояния сессии — конечный автомат:
+An eraser stroke is a stamp with a radial alpha gradient:
 
 ```
-Idle → Capturing → SelectingFirst → Editing ⇄ (DrawingStroke | DraggingSelection | PanelOpen)
-Editing → Exporting → Idle
-Editing → Esc → SelectingFirst → Esc → Idle
-(поздняя фаза) Editing → Recording → Idle
+alpha(r) = 1.0                    at the centre, always 100%
+alpha(r) = falloff(r, hardness)   towards the rim
 ```
 
-## 9. Видео (закладка на будущее, реализация в последней фазе)
+- `hardness = 1.0` gives a step: the whole disc erases fully, a hard round eraser.
+- `hardness = 0.0` fades from the centre to the rim, a soft patch.
+- The centre erases fully at any setting.
 
-- Живой захват той же Windows.Graphics.Capture (frame pool), кроп до выделенной области, подача в Media Foundation `SinkWriter` с аппаратным H.264.
-- Аудио: два независимых WASAPI-потока (loopback = системный звук, capture = микрофон) → две AAC-дорожки во временном контейнере → на этапе сохранения микс в одну дорожку финального MP4 (или отбрасывание одной из них).
-- Индикатор записи — отдельное маленькое topmost-окно (не оверлей), уголки границ — click-through окно с прозрачным фоном.
-- Стоп — тот же глобальный хоткей (роутер в состоянии Recording интерпретирует его как Stop).
+Implementation: the stroke is rasterised into a greyscale **coverage bitmap** whose
+luminance is the erase strength. Overlapping stamps along the stroke are combined with
+`SKBlendMode.Lighten`, taking the maximum rather than accumulating, and the finished
+coverage is applied to the layer once with `SKBlendMode.DstOut`. Stamping semi-transparent
+discs directly would compound along the stroke and erase the middle of a soft line fully.
 
-Что закладывается заранее (Фаза 1–2), чтобы видео легло без переписывания:
+## 5. Undo and redo
 
-- Захват изолирован в `Reshot.Capture` с двумя режимами: `SnapshotFrame()` и `StartStream()`.
-- `Selection` умеет отдавать свой прямоугольник в экранных координатах независимо от UI.
-- Конечный автомат сессии уже содержит состояние `Recording`.
+Command pattern, 32 steps deep.
 
-## 10. Дистрибуция
+Raster operations (brush, eraser, effect) store a snapshot of the affected region before
+and after, and undo restores it. The original design called for 256x256 tiles so a stroke
+would only cost a few tiles; the shipped implementation snapshots the whole bounding
+region instead, which is simpler and has been adequate in practice but costs more memory
+on very large strokes.
 
-- Velopack: `Setup.exe` + дельта-обновления с GitHub Releases, тихая проверка при старте (раз в сутки).
-- Код подписи нет (open source, без бюджета) → SmartScreen будет ругаться первое время; в README проекта — пояснение.
-- Лицензия: MIT (открытый вопрос O-8).
+## 6. Capture and multi-monitor
+
+- On the hotkey, **every monitor is captured at once** (one `GraphicsCaptureItem` per
+  display) and the frames are composed into a single bitmap in virtual-desktop
+  coordinates. That is a hard requirement for "Ctrl+A then Ctrl+A selects all monitors":
+  the selection can only grow if the pixels are already there.
+- The overlay is one borderless window spanning the whole virtual desktop.
+- Protected content: Windows.Graphics.Capture returns whatever the system allows. Windows
+  with a DRM flag may come back black, which is a platform limitation.
+- The yellow Windows capture border is disabled through `IsBorderRequired = false`, which
+  needs the Windows 11 SDK projection and a borderless access request.
+
+## 7. Zero background cost
+
+- The background process is a message-only window plus `RegisterHotKey` plus the tray. No
+  timers, no polling, no watchers.
+- The WPF overlay is **not created at startup**. It is constructed on the first hotkey, so
+  the first call is about 100 ms slower.
+- Every capture resource (D3D device, frame pool) is released when the session closes.
+
+## 8. Input routing
+
+One input router per session, highest priority first:
+
+1. Open panels and toolbar flyouts. A right-click on the toolbar never reaches the
+   eyedropper.
+2. Context modifiers for the tool (`Shift`, `Ctrl`).
+3. The active tool.
+
+Session states are a small state machine:
+
+```
+Idle → Capturing → Selecting → Editing → Exporting → Idle
+Editing → Esc → Selecting → Esc → Idle
+Editing → Recording → Idle
+```
+
+## 9. Video
+
+- Live capture through the same Windows.Graphics.Capture frame pool, cropped to the
+  selection and fed to a Media Foundation `SinkWriter` with hardware H.264.
+- Audio: independent WASAPI streams (loopback for system sound, capture for the
+  microphone, process loopback for individual applications). Each source is written to its
+  **own raw PCM file** during the recording.
+- On stop, the chosen tracks are mixed and muxed into the final MP4. The video is copied
+  through without re-encoding, so choosing tracks costs no quality and little time. This is
+  what makes the post-recording track picker honest: nothing is mixed until the user picks.
+- The recording indicator is a separate small topmost window, and the corner brackets are a
+  click-through window with a transparent background.
+- Stop is the same global hotkey, which the router interprets as Stop while recording.
+
+## 10. Distribution
+
+- A portable ZIP and an Inno Setup installer, both produced by `build/build-release.ps1`.
+  The installer is per user and needs no administrator rights.
+- The application is published self-contained, so no .NET runtime is required.
+- There is no code signing (open source, no budget), so SmartScreen will complain at first.
+  The README explains it.
+- **Automatic updates are not implemented.** Velopack was planned and the `update.auto`
+  setting exists in the UI, but nothing is wired to it yet.
+- License: MIT.

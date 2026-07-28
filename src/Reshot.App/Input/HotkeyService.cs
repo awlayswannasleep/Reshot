@@ -8,7 +8,7 @@ namespace Reshot.App.Input;
 
 /// <summary>
 /// Owns the single global hotkey. Backed by a <b>message-only</b> HwndSource so
-/// there is no visible window and no polling — Windows delivers WM_HOTKEY to the
+/// there is no visible window and no polling, Windows delivers WM_HOTKEY to the
 /// message loop, which is exactly the "zero background cost" model from
 /// ARCHITECTURE §7. Rebinding = unregister + register on the same window.
 /// </summary>
@@ -41,7 +41,7 @@ public sealed class HotkeyService : IDisposable
 
     /// <summary>
     /// Registers <paramref name="hotkeyText"/>, replacing any current binding.
-    /// Returns false (and logs) if parsing or the OS registration fails — e.g.
+    /// Returns false (and logs) if parsing or the OS registration fails, e.g.
     /// the combo is already owned by another app.
     /// </summary>
     public bool Register(string hotkeyText)

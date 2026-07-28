@@ -64,7 +64,7 @@ public sealed class Mp4VideoEncoder : IDisposable
 
         using (var inType = MediaFactory.MFCreateMediaType())
         {
-            // NV12 fed straight to the H.264 encoder — no auto color-converter MFT.
+            // NV12 fed straight to the H.264 encoder, no auto color-converter MFT.
             inType.Set(MediaTypeAttributeKeys.MajorType, MediaTypeGuids.Video);
             inType.Set(MediaTypeAttributeKeys.Subtype, VideoFormatGuids.NV12);
             inType.Set(MediaTypeAttributeKeys.InterlaceMode, (uint)Progressive);

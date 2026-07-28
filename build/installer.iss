@@ -1,11 +1,11 @@
 ; reshot installer (Inno Setup 6).
 ;
-; Not meant to be compiled by hand — build/build-release.ps1 passes the version and the
+; Not meant to be compiled by hand, build/build-release.ps1 passes the version and the
 ; staged payload in:
 ;   ISCC.exe installer.iss /DAppVersion=1.0.0 /DPayloadDir=..\dist\reshot /DOutputDir=..\dist
 ;
 ; The payload is the published, self-contained app plus reshot-tauri.exe (the settings
-; window), which must stay next to reshot.exe — that is where the app looks for it first.
+; window), which must stay next to reshot.exe, that is where the app looks for it first.
 
 #ifndef AppVersion
   #define AppVersion "1.0.0"

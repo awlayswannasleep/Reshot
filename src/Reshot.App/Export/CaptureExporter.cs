@@ -160,7 +160,7 @@ public sealed class CaptureExporter
         var quality = Math.Clamp(_settings.Format.Quality, 1, 100);
         var ext = Path.GetExtension(path).ToLowerInvariant();
 
-        // WPF has no WebP encoder — route it through Skia (lossy, keeps alpha).
+        // WPF has no WebP encoder, route it through Skia (lossy, keeps alpha).
         if (ext == ".webp")
         {
             using var skBitmap = SkiaInterop.ToSkBitmap(image);

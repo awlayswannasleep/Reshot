@@ -5,7 +5,7 @@ namespace Reshot.Core.Diagnostics;
 
 /// <summary>
 /// Minimal thread-safe file logger. reshot spends most of its life asleep, so
-/// there is no logging framework and no background flush thread — every call
+/// there is no logging framework and no background flush thread, every call
 /// appends synchronously to <c>%AppData%\reshot\logs\reshot.log</c> and mirrors
 /// to the debugger. Cheap, dependency-free, good enough for a tray utility.
 /// </summary>

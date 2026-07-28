@@ -12,7 +12,7 @@ public sealed class CapturedFrame
     public required int Width { get; init; }
     public required int Height { get; init; }
 
-    /// <summary>Bytes per row. Always <c>Width * 4</c> — rows are compacted on capture.</summary>
+    /// <summary>Bytes per row. Always <c>Width * 4</c>, rows are compacted on capture.</summary>
     public int Stride => Width * 4;
 
     /// <summary>X of the virtual desktop's top-left in screen coordinates (can be negative).</summary>

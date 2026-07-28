@@ -54,7 +54,7 @@ public sealed class Selection
 
     private static Geometry TriangleGeometry(Rect b)
     {
-        // Apex at top-center, base along the bottom edge — inscribed in the box.
+        // Apex at top-center, base along the bottom edge, inscribed in the box.
         var apex = new Point(b.Left + b.Width / 2, b.Top);
         var figure = new PathFigure { StartPoint = apex, IsClosed = true };
         figure.Segments.Add(new LineSegment(new Point(b.Right, b.Bottom), true));

@@ -39,7 +39,7 @@ public static class Mp4Muxer
             reader.SetStreamSelection(SourceReaderIndex.FirstVideoStream, true);
 
             // The source's own compressed type, used for both the output stream and the
-            // input type — that combination is what tells the SinkWriter "don't re-encode".
+            // input type, that combination is what tells the SinkWriter "don't re-encode".
             using var videoType = reader.GetNativeMediaType(SourceReaderIndex.FirstVideoStream, 0);
 
             var attributes = MediaFactory.MFCreateAttributes(1);

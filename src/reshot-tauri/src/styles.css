@@ -356,7 +356,7 @@ body {
   min-width: 0;
 }
 
-/* A direct child of a column must not absorb spare vertical space — only inside
+/* A direct child of a column must not absorb spare vertical space, only inside
    a row (a path picker) should the field take the leftover width. */
 .column > .textInput {
   width: 100%;

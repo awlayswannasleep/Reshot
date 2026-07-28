@@ -16,7 +16,7 @@ public enum HotkeyModifiers : uint
 
 /// <summary>
 /// A parsed global hotkey: a set of modifiers plus a single virtual-key code.
-/// Pure, Windows-API-free, and fully testable — the App layer feeds
+/// Pure, Windows-API-free, and fully testable, the App layer feeds
 /// <see cref="Modifiers"/> and <see cref="VirtualKey"/> straight into RegisterHotKey.
 /// Accepts strings like "PrtScn", "Ctrl+Shift+A", "Alt+F4", "Win+D".
 /// </summary>

@@ -6,7 +6,7 @@ namespace Reshot.Core.Document;
 /// <summary>
 /// The editable state of a capture session (ARCHITECTURE §3). Layers, bottom→top:
 /// EffectsLayer (blur/pixelize over the untouched base), PaintLayer (brush strokes
-/// plus rasterized shapes/text — vectors bake to permanent ink on commit). Plus an
+/// plus rasterized shapes/text, vectors bake to permanent ink on commit). Plus an
 /// AbsoluteMask that punches the whole composite (incl. the base frame) to
 /// transparency. Sized in physical pixels; Skia only.
 /// </summary>
@@ -132,7 +132,7 @@ public sealed class CaptureDocument : IDisposable
     // A "coverage" bitmap is an opaque greyscale image whose luminance is the per-pixel
     // erase strength (0 = keep, 1 = fully erase), with the eraser's Global-opacity already
     // baked in. CreateCoverageAlphaFilter turns that luminance into a pure alpha mask so a
-    // single DstOut removes exactly that fraction of the layer — no compounding.
+    // single DstOut removes exactly that fraction of the layer, no compounding.
 
     /// <summary>Maps a greyscale coverage bitmap to a pure-alpha mask (alpha = red, rgb = 0).</summary>
     public static SKColorFilter CreateCoverageAlphaFilter() => SKColorFilter.CreateColorMatrix(new float[]

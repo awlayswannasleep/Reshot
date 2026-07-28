@@ -29,7 +29,7 @@ public sealed class OcrResultModel
 
 /// <summary>
 /// Text recognition over a region of the frozen frame, using the OS OCR engine
-/// (Windows.Media.Ocr) — offline, no models to ship. Windows OCR is one language per
+/// (Windows.Media.Ocr), offline, no models to ship. Windows OCR is one language per
 /// engine and a mismatched engine substitutes look-alike glyphs (a RU engine turns
 /// Latin "un" into Cyrillic "ип"). The "auto" mode runs both the RU and EN engines and
 /// merges per line: the RU pass reliably reports a line's real script, so Latin-dominant

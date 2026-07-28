@@ -2,7 +2,7 @@ using SkiaSharp;
 
 namespace Reshot.Core.Tools;
 
-/// <summary>Vector draw objects (SPEC §6.3–6.4) — movable, unlike raster brush strokes.</summary>
+/// <summary>Vector draw objects (SPEC §6.3–6.4), movable, unlike raster brush strokes.</summary>
 public enum VectorKind
 {
     Circle,
@@ -29,7 +29,7 @@ public sealed class VectorObject
     public string Text { get; set; } = string.Empty;
     public float FontSize { get; set; } = 32f;
 
-    /// <summary>Triangle apex direction — up when dragged upward, down when downward.</summary>
+    /// <summary>Triangle apex direction, up when dragged upward, down when downward.</summary>
     public bool PointsUp { get; set; } = true;
 
     public void Draw(SKCanvas canvas)

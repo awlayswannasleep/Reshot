@@ -1,245 +1,316 @@
-# RESHOT — Функциональная спецификация
+# reshot functional specification
 
-Версия 1.0 · 2026-07-18
+Version 1.0 · 2026-07-28
 
 ---
 
-## 1. Обзор
+## 1. Overview
 
-reshot — резидентная утилита для скриншотов. Живёт в трее, просыпается по глобальному хоткею (по умолчанию `PrtScn`), замораживает экран, даёт выделить область любой формы, отредактировать её (рисование, текст, фигуры, блюр, пикселизация, ластики) и скопировать/сохранить результат. Позже — запись видео выделенной области.
+reshot is a resident screenshot utility. It lives in the tray, wakes on a global hotkey
+(`Home` by default), freezes the screen, lets you select an area of any shape, edit it
+(drawing, text, shapes, blur, pixelation, erasers, text recognition) and copy or save the
+result. It also records the selected area to video with sound.
 
-## 2. Нефункциональные требования (жёсткие)
+## 2. Non-functional requirements
 
-| Метрика | Значение |
+| Metric | Value |
 |---|---|
-| RAM в простое (фон, трей) | < 30 МБ |
-| CPU в простое | ~0% (нет таймеров, нет поллинга — только ожидание хоткея) |
-| Время от нажатия хоткея до появления оверлея | < 150 мс |
-| Отзывчивость редактора | 60 FPS на выделении/рисовании при 4K-захвате |
-| ОС | Windows 10 1903+ / Windows 11, только x64 |
-| Мониторы с разным DPI | не поддерживаются (без корректировок масштаба) |
+| RAM when idle (tray only) | under 30 MB |
+| CPU when idle | about 0%, no timers and no polling, just a hotkey |
+| Hotkey to overlay | under 150 ms |
+| Editor responsiveness | 60 FPS while selecting and drawing on a 4K capture |
+| OS | Windows 10 2004 (build 19041) or newer, x64 only |
+| Monitors with different DPI | not supported, no scale correction |
 
-## 3. Жизненный цикл сессии
+## 3. Session lifecycle
 
-1. Программа в трее, спит.
-2. Пользователь жмёт `PrtScn` → **мгновенный захват всех мониторов** (один замороженный кадр на весь виртуальный рабочий стол).
-3. Появляется полноэкранный оверлей: замороженный кадр, затемнённый заливкой (по умолчанию чёрный 50% непрозрачности). Курсор в кадр **не** попадает.
-4. Пользователь выделяет область → выделенная зона показывается без затемнения (100% яркость оригинала).
-5. Рядом с выделением появляется тулбар. Сессия **не завершается** после выделения — можно перевыделять, редактировать, комбинировать инструменты сколько угодно.
-6. Выход из сессии: `Copy` / `Save` / `Save As` / `Esc` (отмена без результата).
+1. The program sleeps in the tray.
+2. The user taps the hotkey, which **captures every monitor instantly** into one frozen
+   frame of the whole virtual desktop.
+3. A fullscreen overlay appears: the frozen frame, dimmed by a fill (black at 50% by
+   default). The cursor is **not** part of the frame.
+4. The user selects an area, which is shown undimmed at full brightness.
+5. A toolbar appears near the selection. The session does **not** end after a selection;
+   you can reselect, edit and combine tools freely.
+6. Leaving the session: Copy, Save, Save As, or Esc to cancel with no result.
 
-Правила сессии:
+Session rules:
 
-- Все инструменты редактирования (рисование, блюр, ластики и т.д.) работают **только внутри выделенной области**. Нет выделения — нечего редактировать.
-- Новое выделение тем же инструментом заменяет старое (старое удаляется вместе со своим содержимым редактирования — см. открытый вопрос O-3).
-- **Мультивыделение:** с зажатым `Ctrl` можно создавать несколько активных выделений одновременно.
-- `Ctrl+A` — выделить основной монитор. Повторный `Ctrl+A` (в той же сессии, когда уже выделен основной монитор) — расширить выделение на **все мониторы**.
+- Every editing tool (drawing, blur, erasers and so on) works **only inside a selection**.
+  With nothing selected there is nothing to edit.
+- A new selection with the same tool replaces the old one, and the old one is removed along
+  with its edits.
+- **Multiple selections:** holding `Ctrl` creates several active selections at once.
+- `Ctrl+A` selects the primary monitor. Pressing it again in the same session extends the
+  selection to **all monitors**.
 
-## 4. Выделение
+## 4. Selection
 
-### 4.1 Общая механика (для всех форм)
+### 4.1 Common mechanics
 
-- Любая форма выделения (круг, лассо, полигон, треугольник) после создания оборачивается в **прямоугольную рамку bounding box** с ручками — как выделение объекта произвольной формы в Photoshop.
-- Всё, что внутри рамки, но снаружи самой фигуры — **прозрачность** (альфа-канал). В буфер идёт PNG с прозрачностью.
-- Рамка: 8 ручек (4 угла + 4 середины рёбер) — **ресайз**; захват за само ребро (линию рамки между ручками) — **перемещение** области.
-- `Shift` при растягивании:
-  - если зажат **до** начала растягивания — фиксирует соотношение 1:1 (квадрат / идеальный круг);
-  - если зажат **во время** растягивания — фиксирует текущее соотношение сторон и дальше тянет с ним.
-  - Работает для прямоугольника и круга.
-- `Esc` при активном выделении — снять выделение (второй `Esc` — закрыть сессию; уточнить в O-4).
+- Any selection shape (ellipse, lasso, polygon, triangle) is wrapped in a **rectangular
+  bounding box** with handles once created, like a free-form object selection in Photoshop.
+- Everything inside the box but outside the shape itself is **transparent**. The clipboard
+  receives a PNG with alpha.
+- The frame has 8 handles (4 corners, 4 edge midpoints) for **resizing**. Grabbing the
+  frame itself **moves** the area.
+- `Shift` while dragging:
+  - held **before** the drag starts, it locks a 1:1 ratio (square or perfect circle);
+  - pressed **during** the drag, it locks the current aspect ratio and keeps it.
+- `Esc` with an active selection clears it. A second `Esc` closes the session.
 
-### 4.2 Формы выделения (инструмент 1, подменю по ПКМ на кнопке тулбара)
+### 4.2 Selection shapes (tool 1, right-click the toolbar tab for the flyout)
 
-| ID | Форма | Поведение |
+| ID | Shape | Behaviour |
 |---|---|---|
-| 1 | Rectangle | Базовое. Активно сразу после нажатия хоткея. |
-| 1.1 | Ellipse | Выделение кругом/эллипсом. `Shift` — идеальный круг / фиксация ratio. |
-| 1.2 | Lasso | Свободная кривая. Отпустил кнопку — контур автоматически замыкается прямой линией от конца к началу. Результат — фигура произвольной формы в прямоугольной рамке. |
-| 1.3 | Polygon (hard curve) | Клики ставят точки, точки соединяются прямыми. Замыкание: клик по первой точке, либо **ПКМ** — автозамыкание по кратчайшей дистанции (прямая от последней точки к первой). |
-| 1.4 | Triangle | Выделение треугольником (растягивается как прямоугольник, вписанный треугольник). |
+| 1 | Rectangle | The default, active as soon as the hotkey fires |
+| 1.1 | Ellipse | Circular or elliptical selection. `Shift` gives a perfect circle |
+| 1.2 | Lasso | Freehand curve. Releasing the button closes the outline with a straight line back to the start |
+| 1.3 | Polygon | Clicks place points joined by straight lines. Closing: click the first point, or right-click to close by the shortest line |
+| 1.4 | Triangle | Triangular selection, dragged like a rectangle with the triangle inscribed |
 
-## 5. Тулбар
+## 5. Toolbar
 
-- **Позиция по умолчанию: снаружи выделения, справа снизу.** Если выделение занимает весь экран / тулбару не хватает места снаружи — тулбар переносится **внутрь** области (правый нижний угол внутри).
-- 5 кнопок инструментов + кнопки действий (Copy / Save / Save As, позже — Record).
-- **ПКМ по кнопке инструмента** — вертикальное всплывающее подменю с подинструментами (как в Photoshop). ЛКМ — активировать текущий подинструмент.
-- Быстрое переключение инструментов: клавиши `1` `2` `3` `4` `5`.
-- Пипетка (см. 6.2) **не срабатывает** при ПКМ по самому тулбару — тулбар имеет приоритет.
+- **Default position: outside the selection, bottom right.** If the selection fills the
+  screen and there is no room outside, the toolbar moves **inside** the area instead.
+- **Right-clicking a tab** opens a vertical flyout of sub-tools, like Photoshop. Left-click
+  activates the current sub-tool. Hovering a tab for 0.5 s opens the flyout as well.
+- Each category remembers the sub-tool you used last.
+- Tools are switched with the digits **`1` to `0`**, following the toolbar left to right.
 
-| Клавиша | Инструмент | Подинструменты |
+| Key | Tool | Sub-tools |
 |---|---|---|
 | `1` | Selection | Rectangle, Ellipse, Lasso, Polygon, Triangle |
-| `2` | Draw | Brush, Shapes (circle, square, line, triangle, arrow), Text |
-| `3` | Eraser | Eraser, Absolute Eraser, Filter Eraser |
-| `4` | Effects | Blur, Pixelize |
-| `5` | Record | (поздняя фаза) |
+| `2` | Brush | |
+| `3` | Shapes | Square, Circle, Triangle |
+| `4` | Lines | Line, Arrow |
+| `5` | Erasers | Eraser, Absolute Eraser, Filter Eraser |
+| `6` | Effects | Blur, Pixelate |
+| `7` | Text recognition (OCR) | |
+| `8` | Text | |
+| `9` | Record video | |
+| `0` | Record audio | |
 
-## 6. Инструмент 2 — Рисование
+Every tool keeps its **own** size, opacity and colour, so switching tools does not carry
+the previous tool's settings over.
 
-### 6.1 Кисть (Brush)
+## 6. Drawing
 
-- Полноценная палитра с HEX-вводом цвета.
-- Регулируется: **непрозрачность** кисти, **толщина**.
-- Мазки кисти — **перманентный растр**: после нанесения их нельзя выделить и подвинуть (только стереть ластиком / undo).
+### 6.1 Brush
 
-### 6.2 Пипетка
+- A full colour picker with hex entry.
+- Adjustable **opacity** and **thickness**, up to 200 px.
+- Brush strokes are **permanent raster**: once painted they cannot be selected and moved,
+  only erased or undone.
 
-- В режиме рисования **зажатие ПКМ** на холсте включает пипетку: пока держишь — водишь и видишь цвет под курсором, над курсором висит маленький квадрат-превью с текущим цветом (+ HEX-код). Отпустил ПКМ — цвет выбран в палитру.
-- ПКМ по тулбару пипетку не вызывает (приоритет у меню тулбара).
+### 6.2 Eyedropper
 
-### 6.3 Фигуры (Shapes)
+- **Holding the right mouse button** on the canvas picks a colour. While held, a small
+  preview square with the hex code follows the cursor. Releasing takes the colour.
+- A button in the settings panel arms the eyedropper so it **stays active** until the next
+  right-click, for when holding a button is awkward.
+- Right-clicking the toolbar does not trigger the eyedropper; the toolbar has priority.
 
-- В окне выбора инструментов рисования кроме кисти выбираются формы: **круг, квадрат, линия, треугольник, стрелка** (стрелка одна, обычная).
-- Фигуры — **векторные объекты**: после нанесения их можно выделить, подвинуть, изменить (см. модель слоёв в ARCHITECTURE.md).
+### 6.3 Shapes and lines
 
-### 6.4 Текст (Text)
+- Shapes: square, circle, triangle. Lines: straight line and arrow.
+- Shapes and text are **baked into the paint layer** when committed, so the eraser removes
+  them pixel by pixel like any other ink. They cannot be moved after the fact.
 
-- Инструмент текста в том же окне выбора.
-- Настройки: шрифт, размер, цвет (+ обводка/подложка — см. O-5).
-- Текст — **векторный объект**: можно выделить и переместить после создания.
+### 6.4 Text
 
-### 6.5 Настройки инструмента
+- Settings: font size, colour, opacity.
+- Typing inserts characters, `Enter` starts a new line, `Backspace` deletes.
+- `Esc`, clicking away, or switching tools commits the text and keeps it.
 
-- `Shift` в режиме рисования — открыть панель настроек кисти (цвет/непрозрачность/толщина/выбор фигуры/текст).
+### 6.5 Tool settings
 
-## 7. Инструмент 3 — Ластики
+- `Shift` while drawing opens the tool settings panel. The thin dotted strip above the
+  toolbar does the same on click.
+- The panel adapts to the tool: erasers show size and the Photoshop-style opacity, effects
+  show size and strength with no colour, ink tools show size, opacity and the picker.
 
-Общее для всех трёх: `Shift` открывает меню настроек — **размер** и **сила (hardness)**.
+## 7. Erasers
 
-Модель силы — **как в Photoshop** (см. референс-скрин с мягкой и жёсткой кистью):
+All three share a size setting and the Photoshop-style **opacity**, which is a radial
+falloff rather than plain transparency:
 
-- Зона ластика — круг заданного размера.
-- **Центр зоны (1 px) стирает на 100% всегда**, независимо от выставленной силы.
-- Сила 100% — вся зона стирает всё, что в неё попадает (жёсткий край).
-- Сила 0% — края зоны почти не стирают, интенсивность плавно растёт от края к центру (мягкая гауссова кисть).
+- The eraser area is a disc of the given size.
+- **The centre always erases at 100%**, whatever the setting.
+- At 100% the whole disc erases everything it touches, a hard edge.
+- At 30% the rim erases at 30% and the strength rises smoothly towards the centre, a soft
+  gradient.
 
-| ID | Ластик | Что стирает |
+| ID | Eraser | What it removes |
 |---|---|---|
-| 3 | Eraser | Только нарисованное пользователем (кисть, фигуры, текст). |
-| 3.1 | Absolute Eraser | **Всё**, включая сам захваченный кадр — до прозрачности. |
-| 3.2 | Filter Eraser | Только фильтры (блюр / пикселизацию), возвращая оригинальные пиксели. |
+| 5 | Eraser | Only what the user drew: brush, shapes, text |
+| 5.1 | Absolute Eraser | **Everything**, including the captured frame, down to transparency |
+| 5.2 | Filter Eraser | Only the filters (blur, pixelation), restoring the original pixels |
 
-## 8. Инструмент 4 — Эффекты
+## 8. Effects
 
-Общее: `Shift` — меню настроек (сила + размер). Два режима нанесения:
+Both effects share a size and strength setting, and have two application modes:
 
-- **По умолчанию:** мажешь кистью.
-- **С зажатым `Ctrl`:** растягиваешь прямоугольную зону, эффект применяется к ней целиком.
+- **By default** you brush them on.
+- **Holding `Ctrl`** you drag a rectangle and the effect fills it.
 
-| ID | Эффект | Настройки |
+| ID | Effect | Settings |
 |---|---|---|
-| 4 | Blur | Сила размытия, размер кисти |
-| 4.1 | Pixelize | Размер пикселей (сила), размер кисти |
+| 6 | Blur | Blur strength, brush size |
+| 6.1 | Pixelate | Pixel size (strength), brush size |
 
-Эффекты лежат на отдельном слое и стираются Filter Eraser (3.2) без потери оригинала.
+Effects live on their own layer and are removed by the Filter Eraser without touching the
+original.
 
-## 9. Инструмент 5 — Запись видео (поздняя фаза)
+## 9. Text recognition (OCR)
 
-> Реализуется в последней фазе, но архитектура (живой захват, слой индикаторов) закладывается с Фазы 1.
+- Select an area and press the OCR tool. The text inside it is recognised by the built-in
+  Windows engine: offline, with no models to ship and nothing sent over the network.
+- Recognised words become **selectable** over the frozen frame. Dragging across them
+  selects a span and copies it on release. `Ctrl+C` copies the selection, `Ctrl+A` selects
+  and copies everything, `Esc` leaves the mode.
+- Each word is outlined so it is clear what can be selected.
+- Windows OCR is **one language per engine**, and a mismatched engine substitutes
+  look-alike glyphs (a Russian engine turns the Latin "un" into the Cyrillic "ип"). The
+  default **AUTO** mode therefore runs both the Russian and English engines and merges them
+  line by line: the Russian pass reliably reports a line's real script, so Latin-dominant
+  lines are taken from the English pass and Cyrillic or mixed lines from the Russian one.
+- Right-clicking the tool cycles AUTO, RU, EN for the cases where the automatic choice is
+  wrong.
 
-- Выделяешь область (любым инструментом выделения) → жмёшь Record → начинается запись выделенной области. Для записи экран **не** заморожен — пишется живое изображение.
-- Во время записи весь UI редактирования исчезает: ни выделения, ни тулбара, ничего делать нельзя.
-- Справа сверху экрана — маленькое окно-индикатор: красная лампочка, таймер, разрешение записи.
-- Границы записываемой области показываются **уголками** (как на референс-скрине с красными углами). В настройках: выключить уголки / изменить цвет / полупрозрачность.
-- **Стоп записи — повторное нажатие главного хоткея** (`PrtScn`).
+## 10. Recording
 
-Технические параметры:
+- Select an area with any selection tool, press Record, and the recording starts. The
+  screen is **not** frozen while recording; the live image is captured.
+- The whole editing UI disappears during recording.
+- A small indicator window sits in a corner: a red light, a timer, and the resolution.
+- The bounds of the recorded area are shown with **corner brackets**. The settings can turn
+  them off or change their colour and opacity.
+- **Recording stops on the main hotkey.**
 
-- Контейнер/кодек: **MP4 / H.264, аппаратное кодирование (NVENC)**. Расширение кодеков — потом.
-- FPS: настройка, по умолчанию **60**, варианты 30 и 25.
-- **Аудио — две дорожки**: (1) микрофон, (2) системный звук. Записываются одновременно.
-  - При сохранении — окно выбора: можно выключить любую дорожку; если оставлены обе — они **сводятся в одну** в финальном MP4.
-  - В настройках можно отключить это всплывающее окно и зафиксировать, какие дорожки сохранять.
-  - Выбор устройства микрофона — в настройках программы.
+Technical parameters:
 
-## 10. Действия вывода
+- Container and codec: **MP4 / H.264 with hardware encoding** (NVENC, AMF, QSV).
+- FPS: a setting, 60 by default, with 30 and 25 available.
+- **Audio sources**: the microphone, the full system mix, or individual applications
+  through Windows process loopback (Windows 11). Right-clicking the record tool opens the
+  source picker.
+- Sources are recorded **separately**, so which tracks end up in the file is decided after
+  the recording stops. A small panel appears at the bottom right offering system audio and
+  the microphone; both, one or neither can be kept. The chosen tracks are mixed into a
+  single track and muxed with the video, which is copied through without re-encoding.
+- A "never show this again" checkbox in that panel is the same setting as "Ask which
+  tracks to keep when saving" in the settings window.
+- The microphone device is chosen in the settings.
 
-| ID | Действие | Поведение |
+A standalone audio recorder (tool `0`) records sound alone to M4A, with the same source
+picker.
+
+## 11. Output actions
+
+| ID | Action | Behaviour |
 |---|---|---|
-| 6 | Copy | Результат (обрезанный по выделению, с прозрачностью, со всеми правками) → буфер обмена как PNG. К видео не применяется. |
-| 6.1 | Save | Сохранить в папку из настроек. Скриншоты: `Pictures\reshot`, видео: `Videos\reshot` (по умолчанию). |
-| 6.2 | Save As | Диалог выбора папки/имени. |
+| Copy | Copy | The result, cropped to the selection with transparency and all edits, goes to the clipboard as PNG |
+| Save | Save | Saves to the folder from the settings. Screenshots to `Pictures\reshot`, video to `Videos\reshot` by default |
+| Save As | Save As | A dialog for the folder and name |
 
-Имя файла по шаблону: `reshot_YYYY-MM-DD_HH-mm-ss.png`.
+The file name follows a template, `reshot_YYYY-MM-DD_HH-mm-ss.png` by default.
 
-## 11. Undo / Redo
+## 12. Undo and redo
 
-- `Ctrl+Z` / `Ctrl+Shift+Z` (+ `Ctrl+Y` как алиас).
-- Глубина истории: **32 шага**.
-- Покрывает: мазки, фигуры, текст, эффекты, стирания, смену/сдвиг выделения.
+- `Ctrl+Z` undoes. `Ctrl+Shift+Z` and `Ctrl+Y` both redo.
+- History depth: **32 steps**.
+- Covers strokes, shapes, text, effects, erasing, and selection changes.
 
-## 12. Сводная карта модификаторов
+## 13. Radial menu
 
-| Ввод | В контексте | Действие |
+Holding the main hotkey instead of tapping it opens a radial menu at the cursor with three
+slices and a cancel hub in the middle:
+
+| Slice | Action |
+|---|---|
+| Record screen | Starts recording the primary monitor immediately with the saved settings |
+| Record audio | Starts the audio recorder with every source |
+| Settings | Opens the settings window |
+
+Cancelling: the centre cross, `Esc`, a right-click, or a click outside the wheel.
+
+## 14. Modifier map
+
+| Input | Context | Action |
 |---|---|---|
-| `PrtScn` (настраиваемый) | глобально | Начать сессию / остановить запись видео |
-| `Ctrl+A` | сессия | Выделить основной монитор; повторно — все мониторы |
-| `Ctrl` + drag | выделение | Добавить ещё одно выделение (мультивыделение) |
-| `Ctrl` + drag | эффекты | Прямоугольная зона вместо кисти |
-| `Shift` | выделение | Фиксация пропорций (1:1 или текущих). Настроек у выделения нет — конфликта нет |
-| `Shift` | draw / erasers / effects | Открыть панель настроек инструмента |
-| ПКМ (зажать) | draw, на холсте | Пипетка с превью цвета |
-| ПКМ | polygon | Автозамыкание контура по кратчайшей дистанции |
-| ПКМ | по кнопке тулбара | Вертикальное подменю подинструментов |
-| `1`–`5` | сессия | Быстрое переключение инструментов |
-| `Ctrl+Z` / `Ctrl+Shift+Z` | сессия | Undo / Redo |
-| `Esc` | сессия | Снять выделение / выйти из сессии |
+| Hotkey, tap | global | Start a capture session |
+| Hotkey, hold | global | Open the radial menu |
+| Hotkey | while recording | Stop the recording |
+| `Ctrl+A` | session | Select the primary monitor, again for all monitors |
+| `Ctrl` + drag | selection | Add another selection |
+| `Ctrl` + drag | effects | Rectangular area instead of brushing |
+| `Shift` | selection | Lock the ratio, 1:1 or the current one |
+| `Shift` | drawing, erasers, effects | Open the tool settings panel |
+| Right button, held | drawing, on the canvas | Eyedropper with a colour preview |
+| Right button | polygon | Close the outline by the shortest line |
+| Right button | on a toolbar tab | Sub-tool flyout |
+| Right button | on record video or record audio | Audio source picker |
+| Right button | on the OCR tab | Switch AUTO, RU, EN |
+| `1` to `0` | session | Switch tools, following the toolbar |
+| `Ctrl+Z`, `Ctrl+Shift+Z`, `Ctrl+Y` | session | Undo and redo |
+| `Enter`, `Ctrl+C` | session | Copy and close |
+| `Esc` | session | Back out one layer: armed eyedropper, settings panel, unfinished polygon, then the session |
 
-## 13. Настройки приложения
+## 15. Settings
 
-Хранение: JSON в `%AppData%\reshot\settings.json`.
+Stored as JSON in `%AppData%\reshot\settings.json`.
 
-| Ключ | По умолчанию | Описание |
+| Key | Default | Description |
 |---|---|---|
-| `hotkey` | `PrtScn` | Главный хоткей (перебиндивается) |
-| `dim.opacity` | `0.5` | Сила затемнения невыделенной области |
-| `dim.color` | `#000000` | Цвет заливки затемнения |
-| `paths.screenshots` | `Pictures\reshot` | Папка скриншотов |
-| `paths.videos` | `Videos\reshot` | Папка видео |
-| `autostart` | `true` | Автозапуск с Windows |
-| `format.image` | `png` | Формат по умолчанию (png / jpg / webp) |
-| `filename.template` | `reshot_{date}_{time}` | Шаблон имени файла |
-| `video.fps` | `60` | 60 / 30 / 25 |
-| `video.audio.mic` | `true` | Писать дорожку микрофона |
-| `video.audio.system` | `true` | Писать системный звук |
-| `video.audio.askOnSave` | `true` | Показывать окно выбора дорожек при сохранении |
-| `video.audio.micDevice` | `default` | Устройство микрофона |
-| `video.corners.enabled` | `true` | Уголки границ записи |
-| `video.corners.color` | `#3C9898` | Цвет уголков |
-| `video.corners.opacity` | `0.7` | Прозрачность уголков |
-| `update.auto` | `true` | Автообновление |
+| `hotkey` | `Home` | The main hotkey, rebindable |
+| `audioHotkey` | empty | Optional second hotkey for the audio recorder |
+| `dim.opacity` | `0.5` | Dimming strength outside the selection |
+| `dim.color` | `#000000` | Dimming fill colour |
+| `paths.screenshots` | `Pictures\reshot` | Screenshot folder |
+| `paths.videos` | `Videos\reshot` | Video folder |
+| `paths.records` | `Music\reshot` | Audio recording folder |
+| `autostart` | `true` | Start with Windows |
+| `format.image` | `png` | Default format: png, jpg or webp |
+| `quality` | `90` | JPG and WebP quality |
+| `filename.template` | `reshot_{date}_{time}` | File name template |
+| `video.fps` | `60` | 60, 30 or 25 |
+| `video.audio.mic` | `true` | Record the microphone track |
+| `video.audio.system` | `true` | Record system sound |
+| `video.audio.askOnSave` | `true` | Ask which tracks to keep after recording |
+| `audio.micDevice` | `default` | Microphone device |
+| `video.corners.enabled` | `true` | Corner brackets around the recorded area |
+| `video.corners.color` | `#3C9898` | Bracket colour |
+| `video.corners.opacity` | `0.7` | Bracket opacity |
+| `update.auto` | `true` | Automatic updates. **Not implemented yet** |
 
-UI настроек и всего приложения: **английский**, фиксированная тёмная тема (кастомизация темы — вручную автором позже).
+The interface is English only, with a fixed dark theme.
 
-## 14. Системная интеграция
+## 16. System integration
 
-- Иконка в трее: меню (Open settings, Capture, Pause hotkey, Quit).
-- Single instance — второй запуск активирует первый.
-- Автозапуск через реестр `HKCU\...\Run`.
-- Автообновление (GitHub Releases, см. ARCHITECTURE.md).
+- Tray icon with a menu: Capture, Settings, Pause hotkey, Quit.
+- Single instance: a second launch signals the first and exits.
+- Autostart through the `HKCU\...\Run` registry key.
 
-## 15. Вне скоупа (осознанно)
+## 17. Deliberately out of scope
 
-- macOS / Linux
-- Разный DPI на мониторах
-- Скроллинг-скриншоты (возможно позже)
-- Подсветка/автовыделение окна под курсором
-- Пин скриншота поверх окон
-- Захват курсора
-- История/галерея внутри программы
-- Облака, imgur, OCR
-- Локализация (только EN)
-- GIF/WebM
+- macOS and Linux
+- Different DPI per monitor
+- Scrolling screenshots
+- Highlighting the window under the cursor
+- Pinning a screenshot on top of other windows
+- Capturing the cursor
+- A history or gallery inside the program
+- Cloud upload, imgur
+- Localisation, the UI is English only
+- GIF and WebM
 
-## 16. Открытые вопросы (O)
+## 18. Known deviations from this specification
 
-| # | Вопрос | Предлагаемый дефолт |
-|---|---|---|
-| O-1 | Мультивыделение: что делает Save/Copy с несколькими областями? | Один PNG: bounding box всех областей, между ними прозрачность |
-| O-2 | Двойной `Ctrl+A`: окно времени между нажатиями или просто «повторный в той же сессии»? | Повторный в той же сессии, без таймера |
-| O-3 | Перевыделение: правки, привязанные к старой области, удаляются или переносятся? | Удаляются вместе со старым выделением (с возможностью Ctrl+Z) |
-| O-4 | Первый `Esc` снимает выделение, второй закрывает сессию? | Да |
-| O-5 | Текст: нужны ли обводка и цветная подложка? | Только цвет + шрифт + размер в v1.0 |
-| O-6 | `Enter` = Copy и закрыть сессию? | Да |
-| O-7 | Перетаскивание внутри области (не за ребро) — тоже перемещение? | Да, если активен инструмент выделения |
-| O-8 | Лицензия открытого кода | MIT |
+- The vector layer was dropped. Shapes and text are baked into the paint layer on commit,
+  so the eraser can remove parts of them. In exchange they cannot be moved afterwards.
+- Undo stores whole-region snapshots rather than 256x256 tiles, which costs more memory on
+  large strokes.
+- Automatic updates are not implemented.
+- MP4 has no alpha channel, so the area outside a non-rectangular recording is black rather
+  than transparent.

@@ -15,7 +15,7 @@ namespace Reshot.App;
 
 /// <summary>
 /// Application composition root. Wires together the single-instance guard, tray,
-/// global hotkey, settings and autostart. Holds no editing/capture logic — that
+/// global hotkey, settings and autostart. Holds no editing/capture logic, that
 /// lands in later phases. Everything here is event-driven so the process sits at
 /// ~0% CPU while idle (ARCHITECTURE §7).
 /// </summary>
@@ -51,10 +51,10 @@ public partial class App : System.Windows.Application
 
         // 1. Logging first: a launch that dies on the single-instance check below used to
         // leave no trace at all, so a stale instance holding the lock looked exactly like
-        // "the app is broken" — with an empty log to debug it with.
+        // "the app is broken", with an empty log to debug it with.
         Log.Init();
 
-        // 2. Single instance — a second launch signals the first and exits.
+        // 2. Single instance, a second launch signals the first and exits.
         _singleInstance = new SingleInstance();
         if (!_singleInstance.TryAcquire())
         {
@@ -72,7 +72,7 @@ public partial class App : System.Windows.Application
         DispatcherUnhandledException += (_, args) =>
         {
             Log.Error("Unhandled UI exception", args.Exception);
-            _tray?.ShowBalloon("reshot — error", args.Exception.Message, ToolTipIcon.Error);
+            _tray?.ShowBalloon("reshot: error", args.Exception.Message, ToolTipIcon.Error);
             args.Handled = true;
         };
 
@@ -98,7 +98,7 @@ public partial class App : System.Windows.Application
         if (!_hotkey.Register(settings.Hotkey))
         {
             _tray.ShowBalloon(
-                "reshot — hotkey unavailable",
+                "reshot: hotkey unavailable",
                 $"Could not register '{settings.Hotkey}'. It may be in use by another app. " +
                 "Edit settings.json to pick another.",
                 ToolTipIcon.Warning);
@@ -268,7 +268,7 @@ public partial class App : System.Windows.Application
             _overlay = null;
             _session.Reset();
             Log.Error("Capture failed", ex);
-            _tray?.ShowBalloon("reshot — capture failed", ex.Message, ToolTipIcon.Error);
+            _tray?.ShowBalloon("reshot: capture failed", ex.Message, ToolTipIcon.Error);
         }
     }
 
@@ -319,13 +319,13 @@ public partial class App : System.Windows.Application
                 new System.Windows.Int32Rect(primary.X, primary.Y, primary.Width, primary.Height));
             _hud.Show();
 
-            _tray?.ShowBalloon("reshot — recording", $"Recording… press {_hotkey?.Current} to stop.");
+            _tray?.ShowBalloon("reshot: recording", $"Recording… press {_hotkey?.Current} to stop.");
             Log.Info($"Recording started ({_recorder.Width}x{_recorder.Height}) → {_recordingPath}");
         }
         catch (Exception ex)
         {
             Log.Error("Failed to start recording", ex);
-            _tray?.ShowBalloon("reshot — recording failed", ex.Message, ToolTipIcon.Error);
+            _tray?.ShowBalloon("reshot: recording failed", ex.Message, ToolTipIcon.Error);
             _recording = false;
             StopRecording();
         }
@@ -389,18 +389,18 @@ public partial class App : System.Windows.Application
             var ok = recorder.Finish(keepSystem, keepMic);
             if (ok && path is not null)
             {
-                _tray?.ShowBalloon("reshot — recording saved", path);
+                _tray?.ShowBalloon("reshot: recording saved", path);
                 Log.Info($"Recording saved → {path} (system={keepSystem}, mic={keepMic})");
             }
             else
             {
-                _tray?.ShowBalloon("reshot — saving failed", "See reshot.log for details.", ToolTipIcon.Error);
+                _tray?.ShowBalloon("reshot: saving failed", "See reshot.log for details.", ToolTipIcon.Error);
             }
         }
         catch (Exception ex)
         {
             Log.Error("Error finalizing recording", ex);
-            _tray?.ShowBalloon("reshot — saving failed", ex.Message, ToolTipIcon.Error);
+            _tray?.ShowBalloon("reshot: saving failed", ex.Message, ToolTipIcon.Error);
         }
         finally
         {
@@ -421,7 +421,7 @@ public partial class App : System.Windows.Application
         if (!_audioHotkey.Register(hotkey))
         {
             _tray?.ShowBalloon(
-                "reshot — audio hotkey unavailable",
+                "reshot: audio hotkey unavailable",
                 $"Could not register '{hotkey}'. It may be in use by another app.",
                 ToolTipIcon.Warning);
         }
@@ -488,13 +488,13 @@ public partial class App : System.Windows.Application
             _audioHud.Show();
 
             var stopKey = string.IsNullOrWhiteSpace(settings.AudioHotkey) ? settings.Hotkey : $"{settings.Hotkey} / {settings.AudioHotkey}";
-            _tray?.ShowBalloon("reshot — recording audio", $"Recording audio… press {stopKey} to stop.");
+            _tray?.ShowBalloon("reshot: recording audio", $"Recording audio… press {stopKey} to stop.");
             Log.Info($"Audio recording started → {_audioRecordingPath}");
         }
         catch (Exception ex)
         {
             Log.Error("Failed to start audio recording", ex);
-            _tray?.ShowBalloon("reshot — audio recording failed", ex.Message, ToolTipIcon.Error);
+            _tray?.ShowBalloon("reshot: audio recording failed", ex.Message, ToolTipIcon.Error);
             _audioRecording = false;
             StopAudioRecording();
         }
@@ -517,7 +517,7 @@ public partial class App : System.Windows.Application
 
         if (_audioRecordingPath is not null)
         {
-            _tray?.ShowBalloon("reshot — audio saved", _audioRecordingPath);
+            _tray?.ShowBalloon("reshot: audio saved", _audioRecordingPath);
             Log.Info($"Audio recording saved → {_audioRecordingPath}");
             _audioRecordingPath = null;
         }
@@ -566,7 +566,7 @@ public partial class App : System.Windows.Application
         {
             Log.Error("Settings: reshot-tauri.exe not found");
             _tray?.ShowBalloon(
-                "reshot — settings unavailable",
+                "reshot: settings unavailable",
                 "The settings app (reshot-tauri.exe) was not found. Build it with " +
                 "'npm run tauri build' in src/reshot-tauri.",
                 ToolTipIcon.Error);
@@ -593,7 +593,7 @@ public partial class App : System.Windows.Application
         {
             _settingsProcess = null;
             Log.Error("Settings app failed to start", ex);
-            _tray?.ShowBalloon("reshot — settings failed", ex.Message, ToolTipIcon.Error);
+            _tray?.ShowBalloon("reshot: settings failed", ex.Message, ToolTipIcon.Error);
         }
     }
 
@@ -652,7 +652,7 @@ public partial class App : System.Windows.Application
             RegisterAudioHotkey(updated.AudioHotkey);
 
         // Re-register only if the binding changed and the hotkey is currently active
-        // (leave it alone while paused — it picks up the new binding on resume).
+        // (leave it alone while paused, it picks up the new binding on resume).
         if (_hotkey is { IsRegistered: true } &&
             !string.Equals(oldHotkey, updated.Hotkey, StringComparison.OrdinalIgnoreCase))
         {
@@ -660,7 +660,7 @@ public partial class App : System.Windows.Application
             if (!_hotkey.Register(updated.Hotkey))
             {
                 _tray?.ShowBalloon(
-                    "reshot — hotkey unavailable",
+                    "reshot: hotkey unavailable",
                     $"Could not register '{updated.Hotkey}'. It may be in use by another app.",
                     ToolTipIcon.Warning);
             }
@@ -690,7 +690,7 @@ public partial class App : System.Windows.Application
 
     private void OnSecondInstanceLaunched(object? sender, EventArgs e)
     {
-        // Runs on a thread-pool thread — marshal to the UI thread.
+        // Runs on a thread-pool thread, marshal to the UI thread.
         Dispatcher.Invoke(() =>
         {
             Log.Info("A second instance was launched; surfacing this one.");

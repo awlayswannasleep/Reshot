@@ -1,25 +1,24 @@
-## Установка
+## Install
 
-| Файл | Что это |
+| File | What it is |
 |---|---|
-| `reshot-<версия>-setup.exe` | Установщик. Ставится в профиль пользователя, без прав администратора |
-| `reshot-<версия>-win-x64-portable.zip` | Портативная версия: распакуй и запусти `reshot.exe` |
+| `reshot-<version>-setup.exe` | Installer. Installs per user, no administrator rights |
+| `reshot-<version>-win-x64-portable.zip` | Portable build: unpack and run `reshot.exe` |
 
-Среда .NET не нужна: сборка self-contained.
+No .NET runtime is required; the build is self-contained.
 
-Приложение не подписано сертификатом, поэтому при первом запуске SmartScreen может
-предупредить: «Подробнее» → «Выполнить в любом случае». Контрольные суммы — в
-`SHA256SUMS.txt`.
+The application is not code signed, so SmartScreen may warn on first launch: "More info"
+then "Run anyway". Checksums are in `SHA256SUMS.txt`.
 
-## Требования
+## Requirements
 
-- Windows 10 версии 2004 (сборка 19041) или новее, x64
-- Запись звука отдельных приложений — только Windows 11
-- Распознавание русского текста — нужен языковой пакет OCR
-  («Параметры» → «Язык» → «Русский» → «Компоненты» → «Распознавание текста»)
+- Windows 10 version 2004 (build 19041) or newer, x64
+- Per-application audio capture requires Windows 11
+- Russian text recognition needs a Windows OCR language pack
+  (Settings, Language, Russian, Optional features, Optical character recognition)
 
-## Что нового
+## What's new
 
-<!-- Сюда переносится раздел этой версии из CHANGELOG.md. -->
+<!-- Copy this version's section from CHANGELOG.md here. -->
 
-Полный список изменений — в [CHANGELOG.md](../blob/master/CHANGELOG.md).
+The full list of changes is in [CHANGELOG.md](../blob/main/CHANGELOG.md).

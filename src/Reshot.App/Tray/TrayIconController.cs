@@ -10,7 +10,7 @@ namespace Reshot.App.Tray;
 /// The tray presence (SPEC §14): a NotifyIcon with a context menu
 /// (Capture / Settings / Pause hotkey / Quit) and balloon feedback. Owns a
 /// runtime-drawn placeholder icon; the real app icon arrives in Phase 5.
-/// Raises intent events — it holds no app logic itself.
+/// Raises intent events, it holds no app logic itself.
 /// </summary>
 public sealed class TrayIconController : IDisposable
 {

@@ -3,7 +3,7 @@
 //! The C# recorder stores `audio.micDevice` as an `MMDevice.ID` string (NAudio's
 //! `MMDeviceEnumerator`). NAudio is a thin wrapper over WASAPI's
 //! `IMMDeviceEnumerator`, so calling that same COM interface here yields byte-identical
-//! IDs — anything else (e.g. matching on friendly names) would silently break the
+//! IDs, anything else (e.g. matching on friendly names) would silently break the
 //! device the user picked.
 
 use serde::Serialize;

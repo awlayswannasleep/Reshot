@@ -68,7 +68,7 @@ public partial class TrayMenuWindow : Window
 
     /// <summary>
     /// Closes at most once. Closing the window also deactivates it, which re-enters
-    /// the Deactivated handler — and WPF throws if <c>Close</c> is called while a
+    /// the Deactivated handler, and WPF throws if <c>Close</c> is called while a
     /// close is already in progress.
     /// </summary>
     private void CloseOnce()

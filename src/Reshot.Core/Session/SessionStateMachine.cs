@@ -20,7 +20,7 @@ public enum SessionState
     /// <summary>Producing output (Copy / Save / Save As).</summary>
     Exporting,
 
-    /// <summary>Live video recording. Phase 6 — defined now as a stub target.</summary>
+    /// <summary>Live video recording. Phase 6, defined now as a stub target.</summary>
     Recording,
 }
 
