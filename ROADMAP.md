@@ -1,4 +1,4 @@
-# reshot roadmap
+# Reshot roadmap
 
 **Status as of 2026-07-28: phases 0 to 6 are done and version 1.0.0 is released.**
 

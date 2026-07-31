@@ -3,14 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>reshot · settings</title>
+    <title>Reshot · settings</title>
   </head>
 
   <body>
     <!-- Modal shell mirrors the reference <Modal>: draggable header + close icon. -->
     <section class="wrapper">
       <strong class="titlebar" data-tauri-drag-region>
-        <h2 class="header" data-tauri-drag-region>reshot · settings</h2>
+        <h2 class="header" data-tauri-drag-region>Reshot · settings</h2>
         <button class="closeButton" id="close" title="Close">
           <img src="/close.svg" width="16" height="16" alt="Close" />
         </button>
@@ -55,7 +55,7 @@
                 />
               </label>
               <div class="inputGroup">
-                <p class="inputLabel hint">Click a field, then press a key combination.</p>
+                <p class="inputLabel hint">Click a field, then press a key combination. Print Screen (PrtScn / Prnt) is supported.</p>
                 <button class="button compact" id="clearAudioHotkey">Clear</button>
               </div>
             </div>
@@ -68,6 +68,17 @@
                 <span class="checkmark"></span>
                 <span>Start with Windows</span>
               </label>
+
+              <label class="checkboxWrapper">
+                <input type="checkbox" id="autostartElevated" />
+                <span class="checkmark"></span>
+                <span>…as administrator</span>
+              </label>
+              <p class="inputLabel hint">
+                Needed only to capture over applications that run as administrator. Windows
+                asks for permission once, when this window closes; after that it starts
+                elevated silently, through a scheduled task named “Reshot”.
+              </p>
 
               <label class="checkboxWrapper">
                 <input type="checkbox" id="updateAuto" />
@@ -257,7 +268,7 @@
 
               <div>
                 <p>
-                  reshot is a resident screenshot and screen-recording tool for Windows. It sits
+                  Reshot is a resident screenshot and screen-recording tool for Windows. It sits
                   in the tray on a global hotkey and does no work at all until you call it.
                 </p>
                 <p>
@@ -280,14 +291,15 @@
 
               <div class="binds">
                 <p class="bindGroup">Global (anywhere in Windows)</p>
-                <div class="bind"><kbd id="infoHotkey">Home</kbd><span class="what">Tap: freeze the screen and start a capture</span></div>
-                <div class="bind"><kbd class="infoHotkeyAlias">Home</kbd><span class="what">Hold: open the radial quick menu</span></div>
-                <div class="bind"><kbd class="infoHotkeyAlias">Home</kbd><span class="what">While recording: stop and save</span></div>
+                <div class="bind"><kbd id="infoHotkey">PrtScn</kbd><span class="what">Tap: freeze the screen and start a capture</span></div>
+                <div class="bind"><kbd class="infoHotkeyAlias">PrtScn</kbd><span class="what">Hold: open the radial quick menu</span></div>
+                <div class="bind"><kbd class="infoHotkeyAlias">PrtScn</kbd><span class="what">While recording: stop and save</span></div>
                 <div class="bind"><kbd class="infoAudioHotkey">not set</kbd><span class="what">Optional second hotkey: start / stop the audio recorder</span></div>
 
                 <p class="bindGroup">Radial menu (hold the main hotkey)</p>
-                <div class="bind"><kbd>LMB</kbd><span class="what">On a slice: quick screen recording, quick audio, or settings</span></div>
-                <div class="bind"><kbd>Esc</kbd><kbd>RMB</kbd><span class="what">Cancel. The centre ✕ and a click outside the wheel do the same</span></div>
+                <div class="bind"><kbd class="infoHotkeyAlias">PrtScn</kbd><span class="what">Point at a slice and release: quick screen recording, quick audio, or settings</span></div>
+                <div class="bind"><kbd class="infoHotkeyAlias">PrtScn</kbd><span class="what">Release with the cursor still in the middle: cancel</span></div>
+                <div class="bind"><kbd>Esc</kbd><kbd>RMB</kbd><span class="what">Cancel. The centre ✕ and clicking a slice work too</span></div>
 
                 <p class="bindGroup">Tools, in toolbar order</p>
                 <div class="bind"><kbd>1</kbd><span class="what">Selection</span></div>
@@ -349,6 +361,7 @@
                 <p class="bindGroup">Finishing the session</p>
                 <div class="bind"><kbd>Enter</kbd><span class="what">Copy to the clipboard and close</span></div>
                 <div class="bind"><kbd>Ctrl</kbd><kbd>C</kbd><span class="what">Copy to the clipboard and close</span></div>
+                <div class="bind"><kbd>✕</kbd><span class="what">Toolbar close button: cancel the session (same as Esc when nothing else is open)</span></div>
                 <div class="bind"><kbd>Esc</kbd><span class="what">Backs out one layer at a time: armed eyedropper, then the settings panel, then an unfinished polygon, then the session itself</span></div>
               </div>
             </div>

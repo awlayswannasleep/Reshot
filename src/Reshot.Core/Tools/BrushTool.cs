@@ -6,7 +6,7 @@ namespace Reshot.Core.Tools;
 public sealed class BrushSettings
 {
     /// <summary>Stroke color (opaque RGB; opacity is applied separately).</summary>
-    public SKColor Color { get; set; } = new(0xFF, 0x3B, 0x30); // reshot red
+    public SKColor Color { get; set; } = new(0xFF, 0x3B, 0x30); // Reshot red
 
     /// <summary>Stroke width in physical pixels.</summary>
     public float Thickness { get; set; } = 6f;

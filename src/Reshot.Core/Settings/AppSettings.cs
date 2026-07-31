@@ -9,11 +9,10 @@ namespace Reshot.Core.Settings;
 public sealed class AppSettings
 {
     /// <summary>
-    /// Main global hotkey. Rebindable (Phase 0: by editing JSON).
-    /// NOTE: the SPEC §13 product default is "PrtScn"; the temporary dev default
-    /// is "Home" until the rebind UI lands in Phase 5 (some keyboards lack PrtScn).
+    /// Main global hotkey. Rebindable in Settings. Default is Print Screen
+    /// ("PrtScn"; aliases include Prnt, Print, PrintScreen).
     /// </summary>
-    public string Hotkey { get; set; } = "Home";
+    public string Hotkey { get; set; } = "PrtScn";
 
     /// <summary>Optional global hotkey for instant audio recording (last-used settings). Empty = off.</summary>
     public string AudioHotkey { get; set; } = string.Empty;
@@ -21,8 +20,16 @@ public sealed class AppSettings
     public DimSettings Dim { get; set; } = new();
     public PathSettings Paths { get; set; } = new();
 
-    /// <summary>Start reshot with Windows (HKCU\...\Run).</summary>
+    /// <summary>Start Reshot with Windows.</summary>
     public bool Autostart { get; set; } = true;
+
+    /// <summary>
+    /// Start it with administrator rights, which is what lets the overlay come up over an
+    /// application that is itself elevated. Registers a scheduled task instead of the
+    /// <c>Run</c> key, so the rights are approved once rather than at every logon.
+    /// Ignored while <see cref="Autostart"/> is off.
+    /// </summary>
+    public bool AutostartElevated { get; set; } = false;
 
     public FormatSettings Format { get; set; } = new();
     public FilenameSettings Filename { get; set; } = new();
@@ -79,7 +86,7 @@ public sealed class FormatSettings
 public sealed class FilenameSettings
 {
     /// <summary>Filename template with {date} and {time} placeholders.</summary>
-    public string Template { get; set; } = "reshot_{date}_{time}";
+    public string Template { get; set; } = "Reshot_{date}_{time}";
 }
 
 public sealed class VideoSettings

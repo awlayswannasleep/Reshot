@@ -1,7 +1,7 @@
 <Window x:Class="Reshot.App.Tray.TrayMenuWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="reshot"
+        Title="Reshot"
         WindowStyle="None"
         AllowsTransparency="True"
         Background="Transparent"
@@ -16,7 +16,7 @@
         Same Half-Life 2 / Source VGUI vocabulary as the settings window
         (src/reshot-tauri/src/styles.css), so the tray menu and the settings
         dialog read as one product. Values come from the reference SCSS at
-        github.com/arlagonix/half-life-screen; the accent is reshot teal where
+        github.com/arlagonix/half-life-screen; the accent is Reshot teal where
         HL2 used orange.
     -->
     <Window.Resources>

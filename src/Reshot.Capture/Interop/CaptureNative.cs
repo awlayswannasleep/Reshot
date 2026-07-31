@@ -14,6 +14,13 @@ internal static class CaptureNative
     [DllImport("user32.dll")]
     public static extern int GetSystemMetrics(int nIndex);
 
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+
     // ---- Monitor enumeration ----------------------------------------------------
     private const int MONITORINFOF_PRIMARY = 0x1;
 

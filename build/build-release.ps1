@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Builds every release artifact for reshot: the app, the settings window, a portable
+    Builds every release artifact for Reshot: the app, the settings window, a portable
     ZIP and (when Inno Setup is present) the installer.
 
 .DESCRIPTION

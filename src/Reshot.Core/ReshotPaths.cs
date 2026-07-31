@@ -1,7 +1,7 @@
 namespace Reshot.Core;
 
 /// <summary>
-/// Central resolver for every path reshot writes to under the user profile.
+/// Central resolver for every path Reshot writes to under the user profile.
 /// Everything lives under <c>%AppData%\reshot\</c> (see SPEC §13).
 /// </summary>
 public static class ReshotPaths

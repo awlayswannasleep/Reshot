@@ -175,6 +175,7 @@ public sealed class HotkeyDefinition
     private static readonly Dictionary<string, (uint Vk, string Canonical)> NamedKeys = new()
     {
         ["prtscn"] = (0x2C, "PrtScn"),
+        ["prnt"] = (0x2C, "PrtScn"),
         ["printscreen"] = (0x2C, "PrtScn"),
         ["print"] = (0x2C, "PrtScn"),
         ["snapshot"] = (0x2C, "PrtScn"),

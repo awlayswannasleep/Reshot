@@ -10,8 +10,8 @@ public class FilenameBuilderTests
     [Fact]
     public void Builds_default_template()
     {
-        var name = FilenameBuilder.Build("reshot_{date}_{time}", "png", Sample);
-        Assert.Equal("reshot_2026-07-18_14-32-01.png", name);
+        var name = FilenameBuilder.Build("Reshot_{date}_{time}", "png", Sample);
+        Assert.Equal("Reshot_2026-07-18_14-32-01.png", name);
     }
 
     [Fact]
@@ -25,7 +25,7 @@ public class FilenameBuilderTests
     public void Empty_template_falls_back_to_default()
     {
         var name = FilenameBuilder.Build("", "png", Sample);
-        Assert.Equal("reshot_2026-07-18_14-32-01.png", name);
+        Assert.Equal("Reshot_2026-07-18_14-32-01.png", name);
     }
 
     [Fact]

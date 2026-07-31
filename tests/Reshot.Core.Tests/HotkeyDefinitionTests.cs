@@ -21,6 +21,7 @@ public class HotkeyDefinitionTests
     [Theory]
     [InlineData("printscreen")]
     [InlineData("PRINT")]
+    [InlineData("Prnt")]
     [InlineData("  snapshot ")]
     public void PrtScn_aliases_and_casing_normalize(string input)
     {
