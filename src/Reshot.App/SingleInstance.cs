@@ -4,7 +4,7 @@ using Reshot.Core.Diagnostics;
 namespace Reshot.App;
 
 /// <summary>
-/// Enforces one running reshot per user session (SPEC §14). Uses a named mutex
+/// Enforces one running Reshot per user session (SPEC §14). Uses a named mutex
 /// to detect a prior instance and a named auto-reset event to wake it: a second
 /// launch signals the event and exits, the first instance handles the signal via
 /// an OS-level registered wait, event-driven, no polling, no background CPU.

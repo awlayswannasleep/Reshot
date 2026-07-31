@@ -60,5 +60,5 @@ dist/
 - **A running application locks its own executable.** The script closes `reshot.exe` and
   `reshot-tauri.exe` before building.
 - **Tests run first.** If they fail, nothing is packaged.
-- The installer is **per user** and needs no administrator rights: reshot's autostart entry
+- The installer is **per user** and needs no administrator rights: Reshot's autostart entry
   lives in `HKCU` anyway, and an elevated install would only mismatch permissions.

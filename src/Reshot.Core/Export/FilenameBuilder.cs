@@ -10,7 +10,7 @@ public static class FilenameBuilder
     public static string Build(string template, string extension, DateTime now)
     {
         if (string.IsNullOrWhiteSpace(template))
-            template = "reshot_{date}_{time}";
+            template = "Reshot_{date}_{time}";
 
         var name = template
             .Replace("{date}", now.ToString("yyyy-MM-dd"))

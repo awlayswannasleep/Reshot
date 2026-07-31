@@ -42,7 +42,7 @@ public sealed class TrayIconController : IDisposable
         {
             Icon = _icon,
             Visible = true,
-            Text = "reshot",
+            Text = "Reshot",
         };
 
         _notifyIcon.MouseUp += (_, e) =>

@@ -4,7 +4,7 @@ using System.Text;
 namespace Reshot.Core.Diagnostics;
 
 /// <summary>
-/// Minimal thread-safe file logger. reshot spends most of its life asleep, so
+/// Minimal thread-safe file logger. Reshot spends most of its life asleep, so
 /// there is no logging framework and no background flush thread, every call
 /// appends synchronously to <c>%AppData%\reshot\logs\reshot.log</c> and mirrors
 /// to the debugger. Cheap, dependency-free, good enough for a tray utility.
@@ -22,7 +22,7 @@ public static class Log
         ReshotPaths.EnsureAppDataDir();
         _logFile = Path.Combine(ReshotPaths.LogsDir, "reshot.log");
         TrimIfLarge();
-        Info($"=== reshot session started (pid {Environment.ProcessId}) ===");
+        Info($"=== Reshot session started (pid {Environment.ProcessId}) ===");
     }
 
     public static void Info(string message) => Write(Level.Info, message);

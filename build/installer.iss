@@ -1,4 +1,4 @@
-; reshot installer (Inno Setup 6).
+; Reshot installer (Inno Setup 6).
 ;
 ; Not meant to be compiled by hand, build/build-release.ps1 passes the version and the
 ; staged payload in:
@@ -17,8 +17,8 @@
   #define OutputDir "..\dist"
 #endif
 
-#define AppName      "reshot"
-#define AppPublisher "reshot contributors"
+#define AppName      "Reshot"
+#define AppPublisher "Reshot contributors"
 #define AppUrl       "https://github.com/reteren/reshot"
 #define AppExe       "reshot.exe"
 
@@ -33,7 +33,7 @@ AppSupportURL={#AppUrl}/issues
 AppUpdatesURL={#AppUrl}/releases
 VersionInfoVersion={#AppVersion}
 
-; Per-user install: no admin prompt, and the autostart entry reshot writes lives in
+; Per-user install: no admin prompt, and the autostart entry Reshot writes lives in
 ; HKCU anyway, so an elevated install would only cause mismatched permissions.
 PrivilegesRequired=lowest
 DefaultDirName={autopf}\{#AppName}
@@ -63,7 +63,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
-Name: "autostart"; Description: "Start reshot when Windows starts"; GroupDescription: "Startup:"
+Name: "autostart"; Description: "Start Reshot when Windows starts"; GroupDescription: "Startup:"
 
 [Files]
 Source: "{#PayloadDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -74,7 +74,7 @@ Name: "{group}\{cm:UninstallProgram,{#AppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopicon
 
 [Registry]
-; reshot manages this key itself from its settings; seeding it here just honours the
+; Reshot manages this key itself from its settings; seeding it here just honours the
 ; checkbox above. uninsdeletevalue keeps an uninstall from leaving a dead autostart.
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; \
     ValueName: "reshot"; ValueData: """{app}\{#AppExe}"""; Flags: uninsdeletevalue; Tasks: autostart
@@ -101,7 +101,7 @@ begin
   begin
     DataDir := ExpandConstant('{userappdata}\reshot');
     if DirExists(DataDir) then
-      if MsgBox('Remove reshot settings and logs as well?' + #13#10 + DataDir,
+      if MsgBox('Remove Reshot settings and logs as well?' + #13#10 + DataDir,
                 mbConfirmation, MB_YESNO) = IDYES then
         DelTree(DataDir, True, True, True);
   end;
