@@ -768,6 +768,18 @@
                             <Ellipse Canvas.Left="15" Canvas.Top="15.5" Width="3" Height="3" Fill="{StaticResource Ink}" />
                         </Canvas>
                     </Button>
+
+                    <Border Width="1" Margin="4,3" Background="{StaticResource RuleDark}" />
+                    <Border Width="1" Margin="0,3,4,3" Background="{StaticResource RuleLight}" />
+
+                    <Button x:Name="CloseButton" Style="{StaticResource IconButton}" ToolTip="Close (Esc)">
+                        <!-- Fixed 20×20 box so the X centres like the other toolbar icons. -->
+                        <Canvas Width="20" Height="20">
+                            <Path Stroke="{StaticResource Ink}" StrokeThickness="1.6"
+                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                  Data="M5.5,5.5 L14.5,14.5 M14.5,5.5 L5.5,14.5" />
+                        </Canvas>
+                    </Button>
                 </StackPanel>
             </Border>
         </Canvas>
@@ -782,13 +794,5 @@
             <TextBlock x:Name="OcrHintText" Foreground="White" FontSize="13" Text="OCR" />
         </Border>
 
-        <!-- Hint shown before the first selection. -->
-        <TextBlock x:Name="HintText"
-                   HorizontalAlignment="Center"
-                   VerticalAlignment="Center"
-                   Foreground="#CCFFFFFF"
-                   FontSize="18"
-                   IsHitTestVisible="False"
-                   Text="Drag to select an area  ·  Enter to copy  ·  Esc to cancel" />
     </Grid>
 </Window>

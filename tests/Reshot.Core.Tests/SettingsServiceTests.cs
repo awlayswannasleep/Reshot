@@ -16,7 +16,7 @@ public class SettingsServiceTests : IDisposable
         var settings = service.Load();
 
         Assert.True(File.Exists(_tempFile));
-        Assert.Equal("Home", settings.Hotkey);
+        Assert.Equal("PrtScn", settings.Hotkey);
         Assert.Equal(0.5, settings.Dim.Opacity);
         Assert.Equal("#000000", settings.Dim.Color);
         Assert.True(settings.Autostart);
@@ -60,7 +60,7 @@ public class SettingsServiceTests : IDisposable
         var service = new SettingsService(_tempFile);
         var settings = service.Load();
 
-        Assert.Equal("Home", settings.Hotkey);
+        Assert.Equal("PrtScn", settings.Hotkey);
     }
 
     [Fact]

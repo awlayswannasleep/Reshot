@@ -29,7 +29,7 @@ public partial class SettingsWindow : Window
     {
         InitializeComponent();
 
-        _hotkey = string.IsNullOrWhiteSpace(current.Hotkey) ? "Home" : current.Hotkey;
+        _hotkey = string.IsNullOrWhiteSpace(current.Hotkey) ? "PrtScn" : current.Hotkey;
         _audioHotkey = current.AudioHotkey ?? string.Empty;
         LoadFrom(current);
 
@@ -335,5 +335,5 @@ public partial class SettingsWindow : Window
     }
 
     private void Warn(string message) =>
-        System.Windows.MessageBox.Show(this, message, "reshot: Settings", MessageBoxButton.OK, MessageBoxImage.Warning);
+        System.Windows.MessageBox.Show(this, message, "Reshot: Settings", MessageBoxButton.OK, MessageBoxImage.Warning);
 }

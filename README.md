@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="reshot.png" width="128" alt="reshot">
+<img src="reshot.png" width="128" alt="Reshot">
 
-# reshot
+# Reshot
 
 **A resident screenshot and screen recording tool for Windows.**
 
@@ -18,7 +18,7 @@ It lives in the tray and burns no cycles until you call it.
 
 ## What it is
 
-Press the hotkey and reshot **freezes every monitor at once** in a single frame. Select an
+Press the hotkey and Reshot **freezes every monitor at once** in a single frame. Select an
 area of any shape, annotate it, and send it to the clipboard or to a file. Or record the
 selected area to video with sound.
 
@@ -62,7 +62,7 @@ waiting to fire. Idle, that means under 30 MB of memory and roughly 0% CPU.
 
 **Shell**
 
-- Radial menu on holding the hotkey: quick screen recording, quick audio, settings
+- Radial menu on holding the hotkey: point at a slice, release to run it, no clicking
 - Half-Life 2 / Source VGUI styling
 - Settings, autostart, single instance
 
@@ -88,15 +88,21 @@ No .NET runtime is required; the build is self-contained.
 - A Windows OCR language pack for Russian text recognition
   (Settings, Language, Russian, Optional features, Optical character recognition)
 - Monitors with different DPI scaling are not supported
+- **An application running as administrator cannot be captured over** unless Reshot is
+  elevated too. Windows forbids a normal program from taking the foreground away from an
+  elevated one, so the overlay cannot come up on top of it. Either run that application
+  without administrator rights, or turn on **Start with Windows → …as administrator** in
+  the settings, which registers a scheduled task so Windows grants the rights once instead
+  of prompting at every logon
 
 ## Usage
 
-The default hotkey is `Home` and can be rebound in the settings.
+The default hotkey is `PrtScn` (Print Screen) and can be rebound in the settings.
 
 | Action | What happens |
 |---|---|
 | Tap | The screen freezes and a capture session starts |
-| Hold | Radial menu: quick recording, audio recorder, settings |
+| Hold | Radial menu: point at a slice and release the key to run it |
 | While recording | Stops the recording and saves the file |
 
 Tools are switched with the digits `1` to `0`, in toolbar order. The full list of shortcuts

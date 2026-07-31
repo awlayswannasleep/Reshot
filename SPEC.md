@@ -1,4 +1,4 @@
-# reshot functional specification
+# Reshot functional specification
 
 Version 1.0 · 2026-07-28
 
@@ -6,8 +6,8 @@ Version 1.0 · 2026-07-28
 
 ## 1. Overview
 
-reshot is a resident screenshot utility. It lives in the tray, wakes on a global hotkey
-(`Home` by default), freezes the screen, lets you select an area of any shape, edit it
+Reshot is a resident screenshot utility. It lives in the tray, wakes on a global hotkey
+(`PrtScn` / Print Screen by default), freezes the screen, lets you select an area of any shape, edit it
 (drawing, text, shapes, blur, pixelation, erasers, text recognition) and copy or save the
 result. It also records the selected area to video with sound.
 
@@ -214,7 +214,7 @@ picker.
 | Save | Save | Saves to the folder from the settings. Screenshots to `Pictures\reshot`, video to `Videos\reshot` by default |
 | Save As | Save As | A dialog for the folder and name |
 
-The file name follows a template, `reshot_YYYY-MM-DD_HH-mm-ss.png` by default.
+The file name follows a template, `Reshot_YYYY-MM-DD_HH-mm-ss.png` by default.
 
 ## 12. Undo and redo
 
@@ -233,7 +233,16 @@ slices and a cancel hub in the middle:
 | Record audio | Starts the audio recorder with every source |
 | Settings | Opens the settings window |
 
-Cancelling: the centre cross, `Esc`, a right-click, or a click outside the wheel.
+The wheel is a **gesture, not a dialog**: it lives only while the key is held. Point the
+cursor at a slice and release the key to run it. There is nothing to click, and no outer
+edge to stay inside, a flick past the rim still counts as pointing that way. The cursor
+starts in the central hub, which means cancel, so releasing without moving does nothing.
+
+Cancelling: release the key with the cursor still in the hub, the centre cross, `Esc`, or a
+right-click. Clicking a slice also works, for anyone who reaches for the mouse.
+
+The wheel is placed at the cursor but kept inside the work area, so it never runs off the
+edge of the screen and never covers the taskbar.
 
 ## 14. Modifier map
 
@@ -241,6 +250,7 @@ Cancelling: the centre cross, `Esc`, a right-click, or a click outside the wheel
 |---|---|---|
 | Hotkey, tap | global | Start a capture session |
 | Hotkey, hold | global | Open the radial menu |
+| Hotkey, release | radial menu | Run the slice the cursor points at; the hub cancels |
 | Hotkey | while recording | Stop the recording |
 | `Ctrl+A` | session | Select the primary monitor, again for all monitors |
 | `Ctrl` + drag | selection | Add another selection |
@@ -263,7 +273,7 @@ Stored as JSON in `%AppData%\reshot\settings.json`.
 
 | Key | Default | Description |
 |---|---|---|
-| `hotkey` | `Home` | The main hotkey, rebindable |
+| `hotkey` | `PrtScn` | The main hotkey, rebindable |
 | `audioHotkey` | empty | Optional second hotkey for the audio recorder |
 | `dim.opacity` | `0.5` | Dimming strength outside the selection |
 | `dim.color` | `#000000` | Dimming fill colour |
@@ -271,9 +281,10 @@ Stored as JSON in `%AppData%\reshot\settings.json`.
 | `paths.videos` | `Videos\reshot` | Video folder |
 | `paths.records` | `Music\reshot` | Audio recording folder |
 | `autostart` | `true` | Start with Windows |
+| `autostartElevated` | `false` | Start with Windows **as administrator**, through a scheduled task. Only then can the overlay appear over an elevated application |
 | `format.image` | `png` | Default format: png, jpg or webp |
 | `quality` | `90` | JPG and WebP quality |
-| `filename.template` | `reshot_{date}_{time}` | File name template |
+| `filename.template` | `Reshot_{date}_{time}` | File name template |
 | `video.fps` | `60` | 60, 30 or 25 |
 | `video.audio.mic` | `true` | Record the microphone track |
 | `video.audio.system` | `true` | Record system sound |
@@ -291,6 +302,11 @@ The interface is English only, with a fixed dark theme.
 - Tray icon with a menu: Capture, Settings, Pause hotkey, Quit.
 - Single instance: a second launch signals the first and exits.
 - Autostart through the `HKCU\...\Run` registry key.
+- **Autostart as administrator** replaces that key with a scheduled task named `Reshot`
+  (logon trigger, highest privileges). This is the only way Windows starts a program
+  elevated at logon without prompting every time: permission is given once, when the task
+  is created. The two are mutually exclusive, or Reshot would be started twice. Declining
+  the prompt falls back to the plain lane and the setting is corrected to match.
 
 ## 17. Deliberately out of scope
 

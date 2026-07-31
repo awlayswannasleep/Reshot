@@ -1,4 +1,4 @@
-# reshot architecture
+# Reshot architecture
 
 ## 1. Stack: C# / .NET 8
 
@@ -9,7 +9,7 @@ for that situation:
 - Compiler and runtime errors are readable and easy to feed back into the assistant. In
   Rust, fighting the borrow checker as a beginner stretches every phase severalfold.
 - There is a huge amount of open source to learn from. **ShareX** (C#) is effectively a
-  reference implementation of half of reshot.
+  reference implementation of half of Reshot.
 - First-class access to the Windows API: Windows.Graphics.Capture, WASAPI, Media
   Foundation, the registry, the tray. All of it is either in the BCL or one NuGet away.
 - Performance is more than sufficient. The frame is frozen, so editing is operations on a
@@ -26,7 +26,7 @@ session and 25 to 30 MB in the background. That is normal for a utility, and the
 | Runtime | .NET 8 (self-contained, win-x64) | One installer, no runtime prerequisite |
 | Overlay and UI | WPF (a borderless topmost window per stage) | Mature, flexible, easy to style dark |
 | Editor canvas | **SkiaSharp** (`SKElement`) | Brushes, alpha, blur, pixelation, arbitrary paths and text, all in one library |
-| Screen capture | **Windows.Graphics.Capture** (CsWinRT) | Modern API: captures games and protected windows, fast, free of GDI artefacts |
+| Screen capture | **DXGI Desktop Duplication** for snapshots, **Windows.Graphics.Capture** for recording and as the snapshot fallback | See §6: duplication hands back a desktop that never had a cursor in it, WGC has to switch the cursor off to match and that blinks |
 | Global hotkey | `RegisterHotKey` (user32, P/Invoke) | Zero background cost: the message arrives in the message loop |
 | Tray | `NotifyIcon` (WinForms interop) | Standard |
 | Settings | `System.Text.Json` writing `%AppData%\reshot\settings.json` | Shared with the settings window |
@@ -128,11 +128,42 @@ on very large strokes.
 
 ## 6. Capture and multi-monitor
 
-- On the hotkey, **every monitor is captured at once** (one `GraphicsCaptureItem` per
-  display) and the frames are composed into a single bitmap in virtual-desktop
-  coordinates. That is a hard requirement for "Ctrl+A then Ctrl+A selects all monitors":
-  the selection can only grow if the pixels are already there.
+- On the hotkey, **every monitor is captured at once** and the frames are composed into a
+  single bitmap in virtual-desktop coordinates. That is a hard requirement for "Ctrl+A then
+  Ctrl+A selects all monitors": the selection can only grow if the pixels are already there.
+- **The snapshot goes through DXGI Desktop Duplication, not WGC.** SPEC §3 wants a frame
+  with no cursor in it. WGC can only deliver that by asking the compositor to leave the
+  cursor out, which forces it off its hardware plane for the life of the session — one
+  visible blink on every screenshot, and no way around it from our side. A duplicated
+  desktop simply never contains the cursor (verified on hardware: parking the cursor on a
+  provably static patch changes not one channel value of it).
+  - The first frame after `DuplicateOutput` is a handshake with an **empty surface**;
+    copying it yields a black screenshot. Only a frame reporting `AccumulatedFrames > 0`
+    holds desktop content, so the acquire is a short retry loop, not a single call.
+  - Duplication is bound to the adapter driving the display, refuses rotated and non-BGRA
+    outputs, and loses to an exclusive-fullscreen game. Every one of those throws, and
+    `ScreenCaptureService` falls back to WGC for that capture. A structural refusal
+    (a second adapter, a rotated display) is remembered so it is not re-tested per capture.
+- **Recording stays on WGC**: it needs a live stream, and the cursor question does not
+  arise the same way.
 - The overlay is one borderless window spanning the whole virtual desktop.
+- The freeze runs **on a worker thread**, not the UI thread: device creation plus the wait
+  for the first frame is the bulk of the hotkey-to-overlay time, and holding the dispatcher
+  for it froze the app instead of merely delaying it.
+- It starts only once the press is known to be a **tap**. Starting it on key-down instead,
+  in parallel with hold detection, is tempting — it saves the user's own key-hold time —
+  but opening a capture session takes the cursor off its hardware plane, so every press
+  blinks, and a hold pays that plus the GPU cost of capturing a running game for a frame
+  that is then discarded. The key-hold time is the cheaper thing to spend.
+- A monitor that does not deliver a first frame within 1.2 s is a fullscreen game refusing
+  capture, and the wait exists only to reach the `CreateForWindow` fallback below.
+- **Elevation is a hard wall.** Reshot runs `asInvoker` (ARCHITECTURE §10: the installer is
+  per user and needs no administrator rights). Against a window running elevated, UIPI
+  blocks `SetForegroundWindow`, `AttachThreadInput` and injected input alike, so the
+  overlay cannot take the foreground no matter how it asks. The only real answers are to
+  run that application unelevated, or to run Reshot elevated as well. The mechanism built
+  for this case, `uiAccess="true"`, needs a signed binary installed under Program Files,
+  and there is no code signing (§10).
 - Protected content: Windows.Graphics.Capture returns whatever the system allows. Windows
   with a DRM flag may come back black, which is a platform limitation.
 - The yellow Windows capture border is disabled through `IsBorderRequired = false`, which

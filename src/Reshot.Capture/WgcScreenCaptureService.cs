@@ -21,6 +21,15 @@ namespace Reshot.Capture;
 /// </summary>
 public sealed class WgcScreenCaptureService : IScreenCaptureService
 {
+    /// <summary>
+    /// How long to wait for a capture session's first frame. WGC normally delivers it
+    /// within a refresh; a monitor that never delivers one is a fullscreen game refusing
+    /// the capture, and the point of the wait is to reach the CreateForWindow fallback,
+    /// not to keep hoping. The old three seconds per monitor turned that case into a
+    /// visible hang before the fallback ever ran.
+    /// </summary>
+    private static readonly TimeSpan FirstFrameTimeout = TimeSpan.FromMilliseconds(1200);
+
     internal static readonly FeatureLevel[] FeatureLevels =
     {
         FeatureLevel.Level_11_1,
@@ -46,6 +55,10 @@ public sealed class WgcScreenCaptureService : IScreenCaptureService
         var buffer = new byte[(long)vWidth * vHeight * 4];
         var capturedMonitors = new List<CapturedMonitor>(monitors.Count);
 
+        // Remember the game HWND *before* we start capturing — exclusive-fullscreen
+        // titles often fail monitor WGC, but CreateForWindow still works.
+        var foregroundHwnd = CaptureNative.GetForegroundWindow();
+
         D3D11CreateDevice(
             null,
             DriverType.Hardware,
@@ -64,7 +77,18 @@ public sealed class WgcScreenCaptureService : IScreenCaptureService
             {
                 foreach (var monitor in monitors)
                 {
-                    CaptureOneMonitor(device, context, winrtDevice, monitor, buffer, vLeft, vTop, vWidth);
+                    try
+                    {
+                        CaptureOneMonitor(device, context, winrtDevice, monitor, buffer, vLeft, vTop, vWidth);
+                    }
+                    catch (Exception ex) when (foregroundHwnd != IntPtr.Zero)
+                    {
+                        Log.Warn($"Monitor WGC failed at ({monitor.Bounds.Left},{monitor.Bounds.Top}): {ex.Message}. Trying foreground window.");
+                        if (!TryCaptureForegroundWindow(
+                                device, context, winrtDevice, foregroundHwnd, monitor,
+                                buffer, vLeft, vTop, vWidth))
+                            throw;
+                    }
                     capturedMonitors.Add(new CapturedMonitor(
                         monitor.Bounds.Left, monitor.Bounds.Top,
                         monitor.Bounds.Width, monitor.Bounds.Height,
@@ -165,7 +189,7 @@ public sealed class WgcScreenCaptureService : IScreenCaptureService
         try
         {
             session.StartCapture();
-            if (!frameReady.Wait(TimeSpan.FromSeconds(3)) || frame is null)
+            if (!frameReady.Wait(FirstFrameTimeout) || frame is null)
                 throw new TimeoutException($"Timed out capturing monitor at ({monitor.Bounds.Left},{monitor.Bounds.Top}).");
 
             CopyFrameIntoBuffer(device, context, frame, buffer, monitor, vLeft, vTop, vWidth);
@@ -192,6 +216,107 @@ public sealed class WgcScreenCaptureService : IScreenCaptureService
         finally
         {
             Marshal.Release(itemPtr);
+        }
+    }
+
+    internal static GraphicsCaptureItem CreateItemForWindow(IntPtr hwnd)
+    {
+        var factory = ActivationFactory.Get("Windows.Graphics.Capture.GraphicsCaptureItem");
+        var interop = factory.AsInterface<CaptureNative.IGraphicsCaptureItemInterop>();
+        var iid = CaptureNative.GraphicsCaptureItem;
+        var itemPtr = interop.CreateForWindow(hwnd, ref iid);
+        try
+        {
+            return GraphicsCaptureItem.FromAbi(itemPtr);
+        }
+        finally
+        {
+            Marshal.Release(itemPtr);
+        }
+    }
+
+    /// <summary>
+    /// Fallback when monitor capture fails (typical for exclusive-fullscreen games):
+    /// capture the foreground HWND and blit it into the monitor's slot if it overlaps.
+    /// </summary>
+    private static bool TryCaptureForegroundWindow(
+        ID3D11Device device,
+        ID3D11DeviceContext context,
+        WinRTDirect3DDevice winrtDevice,
+        IntPtr hwnd,
+        CaptureNative.MonitorHandle monitor,
+        byte[] buffer,
+        int vLeft, int vTop, int vWidth)
+    {
+        if (!CaptureNative.GetWindowRect(hwnd, out var wnd) ||
+            wnd.Width <= 0 || wnd.Height <= 0)
+            return false;
+
+        // Only use the window if it actually covers this monitor (fullscreen / borderless).
+        var overlapW = Math.Min(wnd.Right, monitor.Bounds.Right) - Math.Max(wnd.Left, monitor.Bounds.Left);
+        var overlapH = Math.Min(wnd.Bottom, monitor.Bounds.Bottom) - Math.Max(wnd.Top, monitor.Bounds.Top);
+        if (overlapW < monitor.Bounds.Width / 2 || overlapH < monitor.Bounds.Height / 2)
+            return false;
+
+        GraphicsCaptureItem item;
+        try
+        {
+            item = CreateItemForWindow(hwnd);
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"CreateForWindow failed: {ex.Message}");
+            return false;
+        }
+
+        var size = item.Size;
+        if (size.Width <= 0 || size.Height <= 0)
+            return false;
+
+        var framePool = Direct3D11CaptureFramePool.CreateFreeThreaded(
+            winrtDevice, DirectXPixelFormat.B8G8R8A8UIntNormalized, 2, size);
+        var session = framePool.CreateCaptureSession(item);
+        TrySet(() => session.IsCursorCaptureEnabled = false);
+        if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000))
+            TrySet(() => session.IsBorderRequired = false);
+
+        Direct3D11CaptureFrame? frame = null;
+        using var frameReady = new ManualResetEventSlim(false);
+
+        void OnFrameArrived(Direct3D11CaptureFramePool pool, object _)
+        {
+            frame ??= pool.TryGetNextFrame();
+            frameReady.Set();
+        }
+
+        framePool.FrameArrived += OnFrameArrived;
+        try
+        {
+            session.StartCapture();
+            if (!frameReady.Wait(FirstFrameTimeout) || frame is null)
+                return false;
+
+            // Treat the window as covering this monitor's rect in the virtual desktop.
+            var fakeMonitor = new CaptureNative.MonitorHandle(
+                monitor.Handle,
+                new CaptureNative.RECT
+                {
+                    Left = monitor.Bounds.Left,
+                    Top = monitor.Bounds.Top,
+                    Right = monitor.Bounds.Right,
+                    Bottom = monitor.Bounds.Bottom,
+                },
+                monitor.IsPrimary);
+            CopyFrameIntoBuffer(device, context, frame, buffer, fakeMonitor, vLeft, vTop, vWidth);
+            Log.Info($"Capture: foreground window fallback for monitor ({monitor.Bounds.Left},{monitor.Bounds.Top}).");
+            return true;
+        }
+        finally
+        {
+            framePool.FrameArrived -= OnFrameArrived;
+            frame?.Dispose();
+            session.Dispose();
+            framePool.Dispose();
         }
     }
 

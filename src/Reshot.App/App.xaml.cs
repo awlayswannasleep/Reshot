@@ -43,6 +43,13 @@ public partial class App : System.Windows.Application
     private DateTime _hotkeyDownAt;
     private bool _holdDetecting;
     private const int HoldThresholdMs = 250;
+
+    /// <summary>
+    /// Bumped by every capture attempt. A frame that comes back under an old number was
+    /// superseded by a newer press and is dropped: a slow capture must never lock the
+    /// hotkey out, and must never open a session showing a screen the user has left.
+    /// </summary>
+    private int _captureGeneration;
     private readonly SessionStateMachine _session = new();
 
     protected override void OnStartup(StartupEventArgs e)
@@ -72,25 +79,27 @@ public partial class App : System.Windows.Application
         DispatcherUnhandledException += (_, args) =>
         {
             Log.Error("Unhandled UI exception", args.Exception);
-            _tray?.ShowBalloon("reshot: error", args.Exception.Message, ToolTipIcon.Error);
+            _tray?.ShowBalloon("Reshot: error", args.Exception.Message, ToolTipIcon.Error);
             args.Handled = true;
         };
 
         _settingsService = new SettingsService();
         var settings = _settingsService.Load();
 
-        // 3. Keep the autostart registry entry in sync with settings.
-        AutostartManager.Apply(settings.Autostart);
+        // 3. Keep autostart in sync with settings. No prompting here: a UAC dialog on every
+        // logon is exactly what the scheduled-task lane exists to avoid.
+        AutostartManager.Apply(settings.Autostart, settings.AutostartElevated, allowPrompt: false);
 
         // 4. Tray.
         _tray = new TrayIconController();
         _tray.CaptureRequested += (_, _) => OnCaptureRequested("tray menu");
         _tray.MenuRequested += (_, _) => ShowTrayMenu();
 
-        // 5. Capture service (WGC). No GPU resources held until a snapshot is taken.
-        _capture = new WgcScreenCaptureService();
+        // 5. Capture service: Desktop Duplication for snapshots where it works, WGC
+        // otherwise and for recording. No GPU resources held until a capture is taken.
+        _capture = new ScreenCaptureService();
         // Ask early for borderless capture access so recordings don't get the yellow border.
-        WgcScreenCaptureService.RequestBorderlessAccess();
+        ScreenCaptureService.RequestBorderlessAccess();
 
         // 6. Global hotkey.
         _hotkey = new HotkeyService();
@@ -98,7 +107,7 @@ public partial class App : System.Windows.Application
         if (!_hotkey.Register(settings.Hotkey))
         {
             _tray.ShowBalloon(
-                "reshot: hotkey unavailable",
+                "Reshot: hotkey unavailable",
                 $"Could not register '{settings.Hotkey}'. It may be in use by another app. " +
                 "Edit settings.json to pick another.",
                 ToolTipIcon.Warning);
@@ -130,14 +139,34 @@ public partial class App : System.Windows.Application
     /// </summary>
     private void OnHotkeyPressed()
     {
+        // Logged before every guard below, on purpose. Each of those guards is a silent
+        // return, so "nothing in the log" used to mean two very different things: the
+        // hotkey never arrived, or it arrived and was swallowed. This line separates them.
+        Log.Info($"Hotkey pressed over {NativeMethods.DescribeForegroundWindow()} " +
+                 $"[overlay={_overlay is not null}, radial={_radial is not null}, " +
+                 $"holdDetecting={_holdDetecting}, recording={_recording}, audio={_audioRecording}].");
+
+        ClearStuckHotkeyState();
+
         // Recording / audio: the hotkey stops it immediately, no menu.
         if (_recording || _audioRecording)
         {
             OnCaptureRequested("hotkey");
             return;
         }
-        // Already in a mode, or WM_HOTKEY auto-repeat while held → ignore.
-        if (_overlay is not null || _radial is not null || _holdDetecting)
+        // The overlay is already up: don't start a second session, but do pull it back in
+        // front. A game that took the foreground back is exactly when the user presses
+        // again, and answering that with nothing is what makes the app feel dead.
+        if (_overlay is not null)
+        {
+            _overlay.Activate();
+            NativeMethods.ForceForegroundWindow(
+                new System.Windows.Interop.WindowInteropHelper(_overlay).Handle);
+            return;
+        }
+
+        // Radial menu open, or WM_HOTKEY auto-repeat while the key is still held → ignore.
+        if (_radial is not null || _holdDetecting)
             return;
 
         uint vk = _hotkey?.Current?.VirtualKey ?? 0;
@@ -149,10 +178,17 @@ public partial class App : System.Windows.Application
 
         _holdDetecting = true;
         _hotkeyDownAt = DateTime.UtcNow;
+
+        // Nothing is captured until we know this is a tap. Starting the freeze here, in
+        // parallel with hold detection, saved the user's key-hold time — and cost far more
+        // than it saved: opening a Windows.Graphics.Capture session takes the cursor off
+        // its hardware plane, which is one visible blink on every press, and a hold (which
+        // never needs a frame at all) paid it too, along with the GPU cost of capturing a
+        // running game just to throw the result away.
         _holdTimer?.Stop();
         _holdTimer = new System.Windows.Threading.DispatcherTimer
         {
-            Interval = TimeSpan.FromMilliseconds(25),
+            Interval = TimeSpan.FromMilliseconds(15),
         };
         _holdTimer.Tick += (_, _) =>
         {
@@ -168,19 +204,62 @@ public partial class App : System.Windows.Application
             {
                 _holdTimer!.Stop();
                 _holdDetecting = false;
-                OpenRadialMenu(); // held → radial menu
+                OpenRadialMenu(vk); // held → radial menu, no frame involved
             }
         };
         _holdTimer.Start();
     }
 
-    /// <summary>Opens the hold-to-open radial menu at the cursor.</summary>
-    private void OpenRadialMenu()
+    /// <summary>
+    /// Freezes the screen on a background thread. The WGC frame pool is created
+    /// free-threaded, so nothing here needs the UI thread — and it must not have it: device
+    /// creation plus the wait for the first frame is the bulk of the hotkey-to-overlay time,
+    /// and blocking the dispatcher with it froze the app instead of just delaying it.
+    /// </summary>
+    private Task<CapturedFrame> CaptureAsync()
+    {
+        var capture = _capture!;
+        return Task.Run(capture.SnapshotAllMonitors);
+    }
+
+    /// <summary>
+    /// Releases hotkey state that outlived whatever set it. Every guard in
+    /// <see cref="OnHotkeyPressed"/> is a silent return, so a flag left set — a hold timer
+    /// that stopped without clearing, a menu window that went away without raising Closed —
+    /// does not merely lose one press: it kills the hotkey for the rest of the session,
+    /// invisibly. Cheap to check here, where it costs one press instead of a restart.
+    /// </summary>
+    private void ClearStuckHotkeyState()
+    {
+        if (_holdDetecting && _holdTimer is not { IsEnabled: true })
+        {
+            Log.Warn("Hotkey: hold detection was left running with a dead timer; clearing.");
+            _holdDetecting = false;
+        }
+
+        if (_radial is { IsVisible: false })
+        {
+            Log.Warn("Hotkey: the radial menu is no longer visible but was never cleared; clearing.");
+            _radial = null;
+        }
+
+        if (_overlay is { IsVisible: false })
+        {
+            Log.Warn("Hotkey: the overlay is no longer visible but was never cleared; clearing.");
+            _overlay = null;
+        }
+    }
+
+    /// <summary>
+    /// Opens the hold-to-open radial menu at the cursor. <paramref name="vk"/> is the key
+    /// still being held: the menu watches it and commits the hovered slice when it comes up.
+    /// </summary>
+    private void OpenRadialMenu(uint vk)
     {
         if (_radial is not null || _overlay is not null || _recording || _audioRecording)
             return;
 
-        _radial = new Radial.RadialMenuWindow();
+        _radial = new Radial.RadialMenuWindow(vk);
         _radial.Chosen += choice =>
         {
             switch (choice)
@@ -191,7 +270,98 @@ public partial class App : System.Windows.Application
             }
         };
         _radial.Closed += (_, _) => _radial = null;
-        _radial.Show();
+        ShowOverGame(_radial, "Radial menu");
+    }
+
+    /// <summary>
+    /// Shows one of our topmost windows and makes sure it is actually in front.
+    ///
+    /// Whether a game is involved is decided <b>before</b> the window appears, because
+    /// afterwards the foreground is ours and the answer is always no. Against an ordinary
+    /// desktop that answer means: show the window and do nothing else. Every unlock, every
+    /// input-queue attach, every Alt trick exists for the game case alone, and running
+    /// them on the desktop bought nothing but a blinking cursor.
+    /// </summary>
+    private static void ShowOverGame(System.Windows.Window window, string what)
+    {
+        var contested = NativeMethods.ForegroundIsFullscreenForeignWindow();
+        var over = contested ? NativeMethods.DescribeForegroundWindow() : "desktop";
+
+        // Unlock *after* the frame is frozen, so WGC still saw the game.
+        if (contested)
+            NativeMethods.UnlockInputFromGame();
+
+        window.Show();
+
+        // Self-guarding: if showing the window already made it the foreground — the normal
+        // case — this returns immediately without touching any input state. The invasive
+        // fallback is allowed exactly here, once per session, and only if the polite path
+        // came up short.
+        var hwnd = new System.Windows.Interop.WindowInteropHelper(window).EnsureHandle();
+        var won = NativeMethods.ForceForegroundWindow(hwnd, invasive: true);
+
+        Log.Info($"{what} shown over {over}; foreground = " +
+                 $"{(won ? "ours" : NativeMethods.DescribeForegroundWindow())}.");
+
+        if (contested)
+            KeepWindowInFront(window);
+    }
+
+    /// <summary>
+    /// Holds a window in front of a game for as long as it is open. Runs <b>only</b> when
+    /// a fullscreen foreign window was in front when we opened: against the desktop there
+    /// is nothing to hold off, and this loop is not free.
+    ///
+    /// Two phases, because the two halves cost very different things. Stealing the
+    /// foreground attaches our input queue to the game's, which merges cursor state and is
+    /// what the user sees as blinking, so it is tried a bounded number of times and then
+    /// abandoned. Re-asserting topmost touches no input state at all, so it keeps going at
+    /// a slow tick for the whole session — a game that re-asserts its own topmost every
+    /// frame would otherwise bury the overlay a second after it appeared.
+    /// </summary>
+    private static void KeepWindowInFront(System.Windows.Window window)
+    {
+        const int MaxStealAttempts = 8; // ~0.6s
+        var attempts = 0;
+        var stealing = true;
+
+        var timer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(80),
+        };
+        timer.Tick += (_, _) =>
+        {
+            if (!window.IsLoaded || !window.IsVisible)
+            {
+                timer.Stop();
+                return;
+            }
+
+            var hwnd = new System.Windows.Interop.WindowInteropHelper(window).Handle;
+            if (!stealing)
+            {
+                NativeMethods.AssertTopmost(hwnd);
+                return;
+            }
+
+            // Free of side effects, unlike the rest of the unlock: a game re-confines the
+            // pointer every frame until it accepts that it lost the foreground, and a
+            // pinned pointer makes the overlay look dead to the mouse.
+            NativeMethods.ReleaseCursorClip();
+
+            // Polite tier only. The invasive one already had its single shot before the
+            // loop started, and repeating it against a game is what dropped its frame rate.
+            if (NativeMethods.ForceForegroundWindow(hwnd) || ++attempts >= MaxStealAttempts)
+            {
+                if (attempts >= MaxStealAttempts)
+                    Log.Warn($"Foreground: {NativeMethods.DescribeForegroundWindow()} kept it " +
+                             $"after {MaxStealAttempts} attempts; holding topmost only.");
+                stealing = false;
+                timer.Interval = TimeSpan.FromMilliseconds(250);
+            }
+        };
+        timer.Start();
+        window.Closed += (_, _) => timer.Stop();
     }
 
     /// <summary>Radial "quick record": records the whole primary monitor with saved video settings.</summary>
@@ -212,7 +382,7 @@ public partial class App : System.Windows.Application
         });
     }
 
-    private void OnCaptureRequested(string source)
+    private async void OnCaptureRequested(string source)
     {
         // While recording, the main hotkey is the Stop control (SPEC §9).
         if (_recording)
@@ -237,11 +407,21 @@ public partial class App : System.Windows.Application
         if (_capture is null || _settingsService is null)
             return;
 
-        Log.Info($"Capture requested via {source}.");
+        Log.Info($"Capture requested via {source}; foreground = {NativeMethods.DescribeForegroundWindow()}.");
         _session.TryTransition(SessionState.Capturing);
+        var generation = ++_captureGeneration;
         try
         {
-            var frame = _capture.SnapshotAllMonitors();
+            var frame = await CaptureAsync();
+
+            // Pressed again while this frame was in flight: the newer press owns the
+            // session, and this frame shows a screen the user has already moved past.
+            if (generation != _captureGeneration || _overlay is not null)
+            {
+                Log.Info("Capture superseded by a newer press; frame dropped.");
+                return;
+            }
+
             _overlay = new OverlayWindow(frame, _settingsService.Current);
             _overlay.SelectionActiveChanged += active =>
                 _session.TryTransition(active ? SessionState.Editing : SessionState.Selecting);
@@ -260,7 +440,8 @@ public partial class App : System.Windows.Application
                     _session.Reset();
                 Log.Info("Overlay closed.");
             };
-            _overlay.Show();
+
+            ShowOverGame(_overlay, "Overlay");
             _session.TryTransition(SessionState.Selecting);
         }
         catch (Exception ex)
@@ -268,7 +449,7 @@ public partial class App : System.Windows.Application
             _overlay = null;
             _session.Reset();
             Log.Error("Capture failed", ex);
-            _tray?.ShowBalloon("reshot: capture failed", ex.Message, ToolTipIcon.Error);
+            _tray?.ShowBalloon("Reshot: capture failed", ex.Message, ToolTipIcon.Error);
         }
     }
 
@@ -319,13 +500,13 @@ public partial class App : System.Windows.Application
                 new System.Windows.Int32Rect(primary.X, primary.Y, primary.Width, primary.Height));
             _hud.Show();
 
-            _tray?.ShowBalloon("reshot: recording", $"Recording… press {_hotkey?.Current} to stop.");
+            _tray?.ShowBalloon("Reshot: recording", $"Recording… press {_hotkey?.Current} to stop.");
             Log.Info($"Recording started ({_recorder.Width}x{_recorder.Height}) → {_recordingPath}");
         }
         catch (Exception ex)
         {
             Log.Error("Failed to start recording", ex);
-            _tray?.ShowBalloon("reshot: recording failed", ex.Message, ToolTipIcon.Error);
+            _tray?.ShowBalloon("Reshot: recording failed", ex.Message, ToolTipIcon.Error);
             _recording = false;
             StopRecording();
         }
@@ -389,18 +570,18 @@ public partial class App : System.Windows.Application
             var ok = recorder.Finish(keepSystem, keepMic);
             if (ok && path is not null)
             {
-                _tray?.ShowBalloon("reshot: recording saved", path);
+                _tray?.ShowBalloon("Reshot: recording saved", path);
                 Log.Info($"Recording saved → {path} (system={keepSystem}, mic={keepMic})");
             }
             else
             {
-                _tray?.ShowBalloon("reshot: saving failed", "See reshot.log for details.", ToolTipIcon.Error);
+                _tray?.ShowBalloon("Reshot: saving failed", "See reshot.log for details.", ToolTipIcon.Error);
             }
         }
         catch (Exception ex)
         {
             Log.Error("Error finalizing recording", ex);
-            _tray?.ShowBalloon("reshot: saving failed", ex.Message, ToolTipIcon.Error);
+            _tray?.ShowBalloon("Reshot: saving failed", ex.Message, ToolTipIcon.Error);
         }
         finally
         {
@@ -421,7 +602,7 @@ public partial class App : System.Windows.Application
         if (!_audioHotkey.Register(hotkey))
         {
             _tray?.ShowBalloon(
-                "reshot: audio hotkey unavailable",
+                "Reshot: audio hotkey unavailable",
                 $"Could not register '{hotkey}'. It may be in use by another app.",
                 ToolTipIcon.Warning);
         }
@@ -488,13 +669,13 @@ public partial class App : System.Windows.Application
             _audioHud.Show();
 
             var stopKey = string.IsNullOrWhiteSpace(settings.AudioHotkey) ? settings.Hotkey : $"{settings.Hotkey} / {settings.AudioHotkey}";
-            _tray?.ShowBalloon("reshot: recording audio", $"Recording audio… press {stopKey} to stop.");
+            _tray?.ShowBalloon("Reshot: recording audio", $"Recording audio… press {stopKey} to stop.");
             Log.Info($"Audio recording started → {_audioRecordingPath}");
         }
         catch (Exception ex)
         {
             Log.Error("Failed to start audio recording", ex);
-            _tray?.ShowBalloon("reshot: audio recording failed", ex.Message, ToolTipIcon.Error);
+            _tray?.ShowBalloon("Reshot: audio recording failed", ex.Message, ToolTipIcon.Error);
             _audioRecording = false;
             StopAudioRecording();
         }
@@ -517,7 +698,7 @@ public partial class App : System.Windows.Application
 
         if (_audioRecordingPath is not null)
         {
-            _tray?.ShowBalloon("reshot: audio saved", _audioRecordingPath);
+            _tray?.ShowBalloon("Reshot: audio saved", _audioRecordingPath);
             Log.Info($"Audio recording saved → {_audioRecordingPath}");
             _audioRecordingPath = null;
         }
@@ -566,7 +747,7 @@ public partial class App : System.Windows.Application
         {
             Log.Error("Settings: reshot-tauri.exe not found");
             _tray?.ShowBalloon(
-                "reshot: settings unavailable",
+                "Reshot: settings unavailable",
                 "The settings app (reshot-tauri.exe) was not found. Build it with " +
                 "'npm run tauri build' in src/reshot-tauri.",
                 ToolTipIcon.Error);
@@ -593,7 +774,7 @@ public partial class App : System.Windows.Application
         {
             _settingsProcess = null;
             Log.Error("Settings app failed to start", ex);
-            _tray?.ShowBalloon("reshot: settings failed", ex.Message, ToolTipIcon.Error);
+            _tray?.ShowBalloon("Reshot: settings failed", ex.Message, ToolTipIcon.Error);
         }
     }
 
@@ -618,6 +799,33 @@ public partial class App : System.Windows.Application
         };
 
         return candidates.FirstOrDefault(File.Exists);
+    }
+
+    /// <summary>
+    /// Applies the autostart settings the user just changed, and corrects them if Windows
+    /// disagreed. Registering the elevated lane needs consent, and a declined prompt must
+    /// leave the checkbox showing what is actually true rather than what was asked for.
+    /// </summary>
+    private void ApplyAutostart(AppSettings updated)
+    {
+        if (_settingsService is null)
+            return;
+
+        var elevated = AutostartManager.Apply(updated.Autostart, updated.AutostartElevated, allowPrompt: true);
+        if (elevated == updated.AutostartElevated)
+            return;
+
+        _settingsService.Current.AutostartElevated = elevated;
+        _settingsService.Save();
+
+        if (!elevated)
+        {
+            _tray?.ShowBalloon(
+                "Reshot: starting normally",
+                "Administrator rights were not granted, so Reshot will start with Windows " +
+                "without them. Overlays over elevated applications will not work.",
+                ToolTipIcon.Warning);
+        }
     }
 
     /// <summary>Re-reads settings.json after the external settings app edited it.</summary>
@@ -646,7 +854,7 @@ public partial class App : System.Windows.Application
         var oldHotkey = _settingsService.Current.Hotkey;
         var oldAudioHotkey = _settingsService.Current.AudioHotkey;
         _settingsService.Update(updated);
-        AutostartManager.Apply(updated.Autostart);
+        ApplyAutostart(updated);
 
         if (!string.Equals(oldAudioHotkey, updated.AudioHotkey, StringComparison.OrdinalIgnoreCase))
             RegisterAudioHotkey(updated.AudioHotkey);
@@ -660,7 +868,7 @@ public partial class App : System.Windows.Application
             if (!_hotkey.Register(updated.Hotkey))
             {
                 _tray?.ShowBalloon(
-                    "reshot: hotkey unavailable",
+                    "Reshot: hotkey unavailable",
                     $"Could not register '{updated.Hotkey}'. It may be in use by another app.",
                     ToolTipIcon.Warning);
             }
@@ -677,13 +885,13 @@ public partial class App : System.Windows.Application
         if (paused)
         {
             _hotkey.Unregister();
-            _tray?.ShowBalloon("reshot", "Hotkey paused.");
+            _tray?.ShowBalloon("Reshot", "Hotkey paused.");
             Log.Info("Hotkey paused by user.");
         }
         else
         {
             _hotkey.Register(_settingsService.Current.Hotkey);
-            _tray?.ShowBalloon("reshot", "Hotkey resumed.");
+            _tray?.ShowBalloon("Reshot", "Hotkey resumed.");
             Log.Info("Hotkey resumed by user.");
         }
     }
@@ -694,7 +902,7 @@ public partial class App : System.Windows.Application
         Dispatcher.Invoke(() =>
         {
             Log.Info("A second instance was launched; surfacing this one.");
-            _tray?.ShowBalloon("reshot", "reshot is already running here.");
+            _tray?.ShowBalloon("Reshot", "Reshot is already running here.");
         });
     }
 

@@ -1,7 +1,7 @@
 <Window x:Class="Reshot.App.Settings.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="reshot: Settings"
+        Title="Reshot: Settings"
         Icon="pack://application:,,,/Assets/reshot.ico"
         Width="620" Height="560"
         WindowStyle="None" ResizeMode="NoResize"
@@ -346,11 +346,11 @@
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
-                                <TextBox x:Name="HotkeyBox" Grid.Column="0" IsReadOnly="True" Text="Home" />
+                                <TextBox x:Name="HotkeyBox" Grid.Column="0" IsReadOnly="True" Text="PrtScn" />
                                 <Button x:Name="RebindBtn" Grid.Column="1" Style="{StaticResource Btn}" Content="Rebind" Width="120" Margin="10,0,0,0" />
                             </Grid>
                             <TextBlock x:Name="HotkeyHint" Style="{StaticResource Hint}" Text="Click Rebind, then press the key combination." />
-                            <CheckBox x:Name="AutostartCheck" Content="Start reshot with Windows" Margin="0,14,0,5" />
+                            <CheckBox x:Name="AutostartCheck" Content="Start Reshot with Windows" Margin="0,14,0,5" />
                             <CheckBox x:Name="UpdateCheck" Content="Install updates automatically" />
                         </StackPanel>
                     </TabItem>

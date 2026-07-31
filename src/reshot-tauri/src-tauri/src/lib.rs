@@ -96,6 +96,47 @@ fn list_microphones() -> Vec<audio::Microphone> {
     audio::list()
 }
 
+/// Print Screen rarely reaches WebView2 as a KeyboardEvent. While a hotkey
+/// field is focused the frontend polls this so PrtScn (and Ctrl/Alt/Shift/Win
+/// combos) can still be bound.
+#[cfg(windows)]
+#[tauri::command]
+fn poll_print_screen() -> Option<String> {
+    use windows::Win32::UI::Input::KeyboardAndMouse::{
+        GetAsyncKeyState, VK_CONTROL, VK_LWIN, VK_MENU, VK_RWIN, VK_SHIFT, VK_SNAPSHOT,
+    };
+
+    fn down(vk: i32) -> bool {
+        unsafe { (GetAsyncKeyState(vk) as u16 & 0x8000) != 0 }
+    }
+
+    if !down(VK_SNAPSHOT.0 as i32) {
+        return None;
+    }
+
+    let mut parts = Vec::new();
+    if down(VK_CONTROL.0 as i32) {
+        parts.push("Ctrl");
+    }
+    if down(VK_MENU.0 as i32) {
+        parts.push("Alt");
+    }
+    if down(VK_SHIFT.0 as i32) {
+        parts.push("Shift");
+    }
+    if down(VK_LWIN.0 as i32) || down(VK_RWIN.0 as i32) {
+        parts.push("Win");
+    }
+    parts.push("PrtScn");
+    Some(parts.join("+"))
+}
+
+#[cfg(not(windows))]
+#[tauri::command]
+fn poll_print_screen() -> Option<String> {
+    None
+}
+
 /// Rounds the window frame itself.
 ///
 /// The acrylic backdrop is painted by DWM over the whole window rectangle, so a
@@ -144,7 +185,8 @@ pub fn run() {
             save_settings,
             settings_path,
             default_dirs,
-            list_microphones
+            list_microphones,
+            poll_print_screen
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -164,7 +206,7 @@ mod tests {
         let path = dir.join("settings.json");
 
         let on_disk = json!({
-            "hotkey": "Home",
+            "hotkey": "PrtScn",
             "update": { "auto": true },
             "futureUnknownKey": "must-survive",
             "video": { "fps": 60, "corners": { "enabled": true, "color": "#FF0000" } }
@@ -214,10 +256,10 @@ mod tests {
         fs::create_dir_all(&dir).unwrap();
         fs::write(&path, "{ this is not json").unwrap();
 
-        save_into(&path, &json!({ "hotkey": "Home" })).unwrap();
+        save_into(&path, &json!({ "hotkey": "PrtScn" })).unwrap();
 
         let result: Value = serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
-        assert_eq!(result["hotkey"], "Home");
+        assert_eq!(result["hotkey"], "PrtScn");
 
         let _ = fs::remove_dir_all(&dir);
     }

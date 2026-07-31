@@ -397,6 +397,12 @@ body {
   border-bottom: 1px solid var(--check-light);
 }
 
+/* A dependent checkbox whose parent is off: still readable, plainly not in play. */
+.checkboxWrapper.disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
 .checkboxWrapper input:checked ~ .checkmark {
   background: var(--check-bg)
     url("data:image/svg+xml;utf8,<svg width='8' height='7' viewBox='0 0 8 7' fill='none' xmlns='http://www.w3.org/2000/svg'><path d='M1 2.5L3 5L7 1' stroke='white' stroke-width='2'/></svg>");

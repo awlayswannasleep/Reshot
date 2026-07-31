@@ -1,8 +1,8 @@
 [package]
 name = "reshot-tauri"
-version = "1.0.0"
-description = "reshot settings"
-authors = ["reshot"]
+version = "1.0.1"
+description = "Reshot settings"
+authors = ["Reshot"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -37,5 +37,8 @@ windows = { version = "0.58", features = [
     "Win32_UI_Shell_PropertiesSystem",
     # Rounded window corners (DWMWA_WINDOW_CORNER_PREFERENCE).
     "Win32_Graphics_Dwm",
+    # GetAsyncKeyState for PrintScreen capture in the settings UI (WebView2
+    # does not deliver that key to JS).
+    "Win32_UI_Input_KeyboardAndMouse",
 ] }
 

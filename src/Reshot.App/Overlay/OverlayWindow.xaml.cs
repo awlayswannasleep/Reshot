@@ -66,10 +66,10 @@ public partial class OverlayWindow : Window
     // (0..1) in the Opacity field. _brush always resolves to the active tool's settings.
     private readonly Dictionary<ToolSettingsKey, BrushSettings> _toolSettings = new()
     {
-        [ToolSettingsKey.Brush]    = new() { Thickness = 5f,  Opacity = 1f,    Color = new(0xFF, 0x0D, 0x00) },
-        [ToolSettingsKey.Shapes]   = new() { Thickness = 5f,  Opacity = 1f,    Color = new(0xFF, 0x0D, 0x00) },
-        [ToolSettingsKey.Lines]    = new() { Thickness = 5f,  Opacity = 1f,    Color = new(0xFF, 0x0D, 0x00) },
-        [ToolSettingsKey.Text]     = new() { Thickness = 5f,  Opacity = 1f,    Color = new(0xFF, 0x0D, 0x00) },
+        [ToolSettingsKey.Brush]    = new() { Thickness = 5f,  Opacity = 1f,    Color = new(0xFF, 0x3B, 0x30) },
+        [ToolSettingsKey.Shapes]   = new() { Thickness = 5f,  Opacity = 1f,    Color = new(0xFF, 0x3B, 0x30) },
+        [ToolSettingsKey.Lines]    = new() { Thickness = 5f,  Opacity = 1f,    Color = new(0xFF, 0x3B, 0x30) },
+        [ToolSettingsKey.Text]     = new() { Thickness = 5f,  Opacity = 1f,    Color = new(0xFF, 0x3B, 0x30) },
         [ToolSettingsKey.Eraser]   = new() { Thickness = 25f, Opacity = 1f },
         [ToolSettingsKey.Pixelize] = new() { Thickness = 30f, Opacity = 0.15f },
         [ToolSettingsKey.Blur]     = new() { Thickness = 30f, Opacity = 0.50f },
@@ -262,6 +262,7 @@ public partial class OverlayWindow : Window
         CopyButton.Click += (_, _) => ExportAndClose(ExportKind.Copy);
         SaveButton.Click += (_, _) => ExportAndClose(ExportKind.Save);
         SaveAsButton.Click += (_, _) => ExportAndClose(ExportKind.SaveAs);
+        CloseButton.Click += (_, _) => EndSession(produced: false);
 
         RecordTool.Click += (_, _) => RequestRecording();
         RecordTool.MouseRightButtonUp += (_, e) => { e.Handled = true; ShowVideoAudioMenu(); };
@@ -543,32 +544,17 @@ public partial class OverlayWindow : Window
     }
 
     /// <summary>
-    /// Reliably pulls the overlay to the foreground and gives it keyboard focus.
-    /// A plain Activate() is not enough when capture was triggered without user
-    /// input (e.g. --capture): Windows' foreground lock blocks the steal.
+    /// Takes keyboard focus for the overlay. Only the WPF half lives here: the Win32 side
+    /// of getting in front of a game (unlocking the pointer, stealing the foreground,
+    /// holding topmost) belongs to <c>App</c>, which knows whether a game is involved at
+    /// all. Doing it here as well ran the whole dance twice per capture, Alt trick
+    /// included, which the user saw as the cursor blinking.
     /// </summary>
     private void ForceForeground()
     {
-        var hwnd = new WindowInteropHelper(this).Handle;
-        var foreground = NativeMethods.GetForegroundWindow();
-        var thisThread = NativeMethods.GetCurrentThreadId();
-        var fgThread = NativeMethods.GetWindowThreadProcessId(foreground, out _);
-
-        var attached = fgThread != thisThread &&
-                       NativeMethods.AttachThreadInput(fgThread, thisThread, true);
-        try
-        {
-            NativeMethods.BringWindowToTop(hwnd);
-            NativeMethods.SetForegroundWindow(hwnd);
-            Activate();
-            Focus();
-            Keyboard.Focus(this);
-        }
-        finally
-        {
-            if (attached)
-                NativeMethods.AttachThreadInput(fgThread, thisThread, false);
-        }
+        Activate();
+        Focus();
+        Keyboard.Focus(this);
     }
 
     private Brush BuildDimBrush()
@@ -2219,7 +2205,6 @@ public partial class OverlayWindow : Window
         _shiftAtStart = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
         _lockedRatio = null;
         _ctrlAMode = CtrlAMode.None;
-        HintText.Visibility = Visibility.Collapsed;
     }
 
     private void BeginDragSelection(Point p)
@@ -2247,7 +2232,6 @@ public partial class OverlayWindow : Window
         _polygonPoints.Clear();
         _polygonPoints.Add(p);
         _polygonCursor = p;
-        HintText.Visibility = Visibility.Collapsed;
         UpdateVisuals();
     }
 
@@ -2415,10 +2399,7 @@ public partial class OverlayWindow : Window
 
         // A stray click (no real drag) while starting a new selection clears it.
         if (wasNew && _selection is not { Bounds.Width: >= 3, Bounds.Height: >= 3 })
-        {
             _selection = null;
-            HintText.Visibility = Visibility.Visible;
-        }
 
         UpdateVisuals();
     }
@@ -2682,7 +2663,6 @@ public partial class OverlayWindow : Window
         _committed.Clear();
         _selection = new Selection { Kind = ShapeKind.Rectangle, Bounds = bounds };
         _dragMode = DragMode.None;
-        HintText.Visibility = Visibility.Collapsed;
         Log.Info($"Ctrl+A → {_ctrlAMode} monitor selection.");
         UpdateVisuals();
     }

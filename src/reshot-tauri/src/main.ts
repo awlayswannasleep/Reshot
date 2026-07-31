@@ -17,6 +17,7 @@ interface Settings {
   hotkey: string;
   audioHotkey: string;
   autostart: boolean;
+  autostartElevated: boolean;
   dim: { opacity: number; color: string };
   paths: { screenshots: string; videos: string; records: string };
   format: { image: string; quality: number };
@@ -31,13 +32,14 @@ interface Settings {
 }
 
 const defaults = (): Settings => ({
-  hotkey: "Home",
+  hotkey: "PrtScn",
   audioHotkey: "",
   autostart: true,
+  autostartElevated: false,
   dim: { opacity: 0.5, color: "#000000" },
   paths: { screenshots: "", videos: "", records: "" },
   format: { image: "png", quality: 90 },
-  filename: { template: "reshot_{date}_{time}" },
+  filename: { template: "Reshot_{date}_{time}" },
   video: {
     fps: 60,
     audio: { mic: true, system: true, askOnSave: true, micDevice: "default" },
@@ -176,6 +178,9 @@ const namedKeys: Record<string, string> = {
 };
 
 function mainKeyOf(event: KeyboardEvent): string | null {
+  // PrintScreen often arrives with an empty `code` in WebView2; `key` may still be set.
+  if (event.key === "PrintScreen" || event.code === "PrintScreen") return "PrtScn";
+
   const code = event.code;
   if (/^Key[A-Z]$/.test(code)) return code.slice(3);
   if (/^Digit[0-9]$/.test(code)) return code.slice(5);
@@ -184,7 +189,7 @@ function mainKeyOf(event: KeyboardEvent): string | null {
 }
 
 function bindHotkeyField(input: HTMLInputElement, apply: (token: string) => void) {
-  input.addEventListener("keydown", (event) => {
+  const capture = (event: KeyboardEvent) => {
     event.preventDefault();
     const key = mainKeyOf(event);
     if (!key) return; // a bare modifier press, keep waiting for the real key
@@ -200,7 +205,42 @@ function bindHotkeyField(input: HTMLInputElement, apply: (token: string) => void
     input.value = token;
     apply(token);
     markDirty();
+  };
+
+  // keyup: PrintScreen sometimes only fires on release (or not at all — see poll below).
+  input.addEventListener("keydown", capture);
+  input.addEventListener("keyup", capture);
+
+  // WebView2 usually swallows PrintScreen. Poll the native key state while focused.
+  let pollId: number | null = null;
+  let lastNative: string | null = null;
+  const stopPoll = () => {
+    if (pollId !== null) {
+      window.clearInterval(pollId);
+      pollId = null;
+    }
+    lastNative = null;
+  };
+  input.addEventListener("focus", () => {
+    stopPoll();
+    pollId = window.setInterval(async () => {
+      try {
+        const token = await invoke<string | null>("poll_print_screen");
+        if (!token) {
+          lastNative = null;
+          return;
+        }
+        if (token === lastNative) return;
+        lastNative = token;
+        input.value = token;
+        apply(token);
+        markDirty();
+      } catch {
+        // Native poll unavailable (non-Windows / old binary): ignore.
+      }
+    }, 50);
   });
+  input.addEventListener("blur", stopPoll);
 }
 
 // ---------------------------------------------------------------- bindings
@@ -396,7 +436,24 @@ async function load() {
     markDirty();
   });
 
-  bindCheckbox("autostart", () => draft.autostart, (v) => (draft.autostart = v));
+  // "…as administrator" only means anything while autostart is on, and leaving it checked
+  // but inert would be a setting that lies. Turning autostart off clears it outright.
+  const elevatedInput = $<HTMLInputElement>("autostartElevated");
+  const syncElevated = () => {
+    elevatedInput.disabled = !draft.autostart;
+    elevatedInput.closest(".checkboxWrapper")?.classList.toggle("disabled", !draft.autostart);
+  };
+  bindCheckbox("autostart", () => draft.autostart, (v) => {
+    draft.autostart = v;
+    if (!v) {
+      draft.autostartElevated = false;
+      elevatedInput.checked = false;
+    }
+    syncElevated();
+  });
+  bindCheckbox("autostartElevated", () => draft.autostartElevated, (v) => (draft.autostartElevated = v));
+  syncElevated();
+
   bindCheckbox("updateAuto", () => draft.update.auto, (v) => (draft.update.auto = v));
 
   // -- Overlay
@@ -475,7 +532,7 @@ async function save(): Promise<boolean> {
     await invoke("save_settings", { patch: draft });
     saved = JSON.parse(JSON.stringify(draft));
     markDirty();
-    status.textContent = "Saved. Restart reshot to apply.";
+    status.textContent = "Saved. Restart Reshot to apply.";
     return true;
   } catch (error) {
     status.textContent = String(error);

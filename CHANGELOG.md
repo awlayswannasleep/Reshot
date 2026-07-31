@@ -3,6 +3,81 @@
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.0.1] - 2026-07-31
+
+### Changed
+
+- Screenshots are taken with **DXGI Desktop Duplication** instead of Windows.Graphics
+  Capture, which removes the cursor blink at the root. The frame has to have no cursor in
+  it (SPEC §3); WGC can only manage that by asking the compositor to leave the cursor out,
+  and that request pushes the cursor off its hardware plane for the life of the session,
+  which is what blinked. A duplicated desktop never contains the cursor in the first place.
+  WGC still does all recording, and still takes over any snapshot duplication refuses: a
+  display driven by a second adapter, a rotated or HDR output, an exclusive-fullscreen game.
+
+- The radial menu is a gesture rather than a dialog: point at a slice and release the
+  hotkey to run it, release over the central hub to cancel. Selection follows the raw
+  cursor direction, so a flick past the rim still selects, and clicking is no longer
+  needed (it still works).
+- The radial menu is now a window the size of the wheel, placed inside the work area. It
+  used to span the whole virtual desktop, which made the shell treat it as a fullscreen
+  app and hide the taskbar.
+- The wait for a monitor's first capture frame is 1.2 s instead of 3 s, so a fullscreen
+  game that refuses monitor capture reaches the window fallback quickly instead of
+  stalling first.
+
+### Fixed
+
+- The capture runs off the UI thread, so a slow one no longer freezes the whole app while
+  the overlay is on its way.
+- Holding the hotkey no longer starts a screen capture. Opening a capture session takes the
+  cursor off its hardware plane — one visible blink per press — and a hold, which never
+  needs a frame, was paying it along with the GPU cost of capturing a running game only to
+  throw the result away.
+- The synthetic Alt keypress used to defeat the foreground lock is gone. It was injected
+  globally, so the whole desktop saw it and games received it as input; sharing the input
+  queue is what makes the foreground call legal anyway.
+- Every hotkey press is logged before the guards that can swallow it, along with the
+  foreground window and the state of each guard. A press that went nowhere used to leave
+  no trace at all, which made "nothing happens" impossible to tell apart from "the hotkey
+  never arrived". A guard flag left set by a window that vanished without notice is also
+  cleared on the next press instead of killing the hotkey for the rest of the session.
+
+### Added
+
+- **Start with Windows as administrator**, a second checkbox under autostart. Reshot cannot
+  put its overlay over an application that runs elevated unless it is elevated itself, and
+  the plain `Run` key cannot do that without a UAC prompt at every logon. The setting
+  registers a scheduled task named `Reshot` (logon trigger, highest privileges) instead, so
+  the permission is granted once, when the box is ticked. Declining that prompt falls back
+  to the ordinary autostart and unticks the box rather than leaving it claiming otherwise.
+  Windows is only asked when Reshot does not already hold the rights, so once the setting
+  is in use — and Reshot is therefore starting elevated — changing it again costs no prompt.
+
+### Documented
+
+- Reshot cannot bring its overlay over an application running as administrator: Windows
+  blocks a normal process from taking the foreground from an elevated one, and the
+  mechanism meant for this (`uiAccess`) needs a signed binary. README and ARCHITECTURE §6.
+- The tray menu no longer has black wedges in its rounded corners: the DWM blur-behind it
+  asked for was painting the corner pixels black on a layered window.
+- The cursor no longer blinks and changes shape in the moment before the overlay or the
+  radial menu appears. Opening either ran the input unlock nine times over, and every run
+  left the cursor's reference-counted display counter one higher than it found it, on top
+  of attaching and detaching the input queue each time. Nothing that touches global input
+  state runs at all now unless a fullscreen foreign window was in front when we opened —
+  on the desktop there is nothing to fight, so the window is simply shown.
+- Against a game, foreground is stolen a bounded number of times (~0.6 s) and then let go,
+  while topmost keeps being re-asserted for the rest of the session: a game that re-asserts
+  its own topmost every frame used to bury the overlay a moment after it appeared.
+  Re-asserting topmost costs no input state, so it cannot flicker. The input-queue attach —
+  the one moment a game's mouse capture can be dropped — now releases it, and the window
+  that kept the foreground is named in the log.
+- A slow capture no longer swallows the hotkey. It used to be ignored until the frame came
+  back, which in a game meant a second or more of presses doing nothing at all; a newer
+  press now supersedes the frame in flight, and pressing again with the overlay already
+  open pulls it back in front instead of being dropped.
+
 ## [1.0.0] - 2026-07-28
 
 First public release.
@@ -64,4 +139,5 @@ First public release.
 - MP4 has no alpha channel, so the area outside a non-rectangular recording is black
   rather than transparent
 
+[1.0.1]: https://github.com/reteren/reshot/releases/tag/v1.0.1
 [1.0.0]: https://github.com/reteren/reshot/releases/tag/v1.0.0

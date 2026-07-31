@@ -1,6 +1,4 @@
-using System.Runtime.InteropServices;
 using System.Windows;
-using System.Windows.Interop;
 
 namespace Reshot.App.Tray;
 
@@ -9,33 +7,17 @@ namespace Reshot.App.Tray;
 /// <c>ContextMenuStrip</c> so it can carry the same Half-Life 2 styling as the
 /// settings dialog. Raises intent events; it holds no app logic itself.
 /// </summary>
+/// <remarks>
+/// The panel used to ask DWM for blur-behind (<c>SetWindowCompositionAttribute</c> with
+/// <c>ACCENT_ENABLE_BLURBEHIND</c>) to echo the settings modal's backdrop-filter. On a
+/// layered window — which <c>AllowsTransparency</c> makes this one — DWM paints that
+/// accent across the whole window rectangle, including the pixels the rounded corners
+/// leave empty, and a zero gradient colour renders them black. The result was four black
+/// wedges around the panel. The translucency lives in the panel brush itself now, so the
+/// corners are simply transparent.
+/// </remarks>
 public partial class TrayMenuWindow : Window
 {
-    // Blur-behind, so the translucent grey panel sits on a blurred desktop the
-    // way the reference modal's backdrop-filter does.
-    private const int WcaAccentPolicy = 19;
-    private const int AccentEnableBlurBehind = 3;
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct AccentPolicy
-    {
-        public int AccentState;
-        public int AccentFlags;
-        public uint GradientColor;
-        public int AnimationId;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct WindowCompositionAttributeData
-    {
-        public int Attribute;
-        public IntPtr Data;
-        public int SizeOfData;
-    }
-
-    [DllImport("user32.dll")]
-    private static extern int SetWindowCompositionAttribute(IntPtr hwnd, ref WindowCompositionAttributeData data);
-
     private bool _closing;
 
     public event EventHandler? CaptureRequested;
@@ -90,31 +72,6 @@ public partial class TrayMenuWindow : Window
     {
         CloseOnce();
         handler?.Invoke(this, EventArgs.Empty);
-    }
-
-    protected override void OnSourceInitialized(EventArgs e)
-    {
-        base.OnSourceInitialized(e);
-
-        var hwnd = new WindowInteropHelper(this).Handle;
-        var accent = new AccentPolicy { AccentState = AccentEnableBlurBehind, AccentFlags = 2 };
-        var size = Marshal.SizeOf(accent);
-        var ptr = Marshal.AllocHGlobal(size);
-        try
-        {
-            Marshal.StructureToPtr(accent, ptr, false);
-            var data = new WindowCompositionAttributeData
-            {
-                Attribute = WcaAccentPolicy,
-                Data = ptr,
-                SizeOfData = size,
-            };
-            SetWindowCompositionAttribute(hwnd, ref data);
-        }
-        finally
-        {
-            Marshal.FreeHGlobal(ptr);
-        }
     }
 
     /// <summary>
