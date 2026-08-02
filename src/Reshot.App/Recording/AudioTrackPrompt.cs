@@ -1,10 +1,11 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using Brush = System.Windows.Media.Brush;
 using Brushes = System.Windows.Media.Brushes;
 using Button = System.Windows.Controls.Button;
 using CheckBox = System.Windows.Controls.CheckBox;
-using Color = System.Windows.Media.Color;
+using FontFamily = System.Windows.Media.FontFamily;
 using HorizontalAlignment = System.Windows.HorizontalAlignment;
 using Orientation = System.Windows.Controls.Orientation;
 
@@ -14,15 +15,14 @@ namespace Reshot.App.Recording;
 /// The small "which audio do you want to keep?" panel that appears at the bottom-right
 /// after a recording. Both tracks, one, or neither can be kept. "Never show this again"
 /// writes back to <c>video.audio.askOnSave</c>, so the settings checkbox and this one are
-/// the same switch. HL2/Source dress, matching the tray menu and settings window.
+/// the same switch.
+///
+/// Every control is dressed from <c>Theme/SourceVgui.xaml</c>, the shared Half-Life 2
+/// vocabulary, so this dialog and the settings window read as one product. Nothing here
+/// invents a colour or a bevel of its own.
 /// </summary>
 public sealed class AudioTrackPrompt : Window
 {
-    private static readonly Color PanelGrey = Color.FromRgb(0x76, 0x76, 0x76);
-    private static readonly Color Bevel = Color.FromRgb(0xC0, 0xBF, 0xBF);
-    private static readonly Color BevelDark = Color.FromRgb(0x45, 0x45, 0x43);
-    private static readonly Color Teal = Color.FromRgb(0x3C, 0x98, 0x98);
-
     private readonly CheckBox _mic;
     private readonly CheckBox _system;
     private readonly CheckBox _never;
@@ -41,8 +41,14 @@ public sealed class AudioTrackPrompt : Window
         Topmost = true;
         ResizeMode = ResizeMode.NoResize;
         SizeToContent = SizeToContent.Height;
-        Width = 320;
+        Width = 300;
         WindowStartupLocation = WindowStartupLocation.Manual;
+
+        // Source VGUI never antialiased its text, and the bevels are single pixels:
+        // display-mode formatting and layout rounding keep both crisp.
+        FontFamily = new FontFamily("Roboto, Segoe UI");
+        TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
+        UseLayoutRounding = true;
 
         _system = MakeCheck("System audio", hasSystem && systemDefault, hasSystem);
         _mic = MakeCheck("Microphone", hasMic && micDefault, hasMic);
@@ -50,63 +56,61 @@ public sealed class AudioTrackPrompt : Window
 
         var stack = new StackPanel();
 
-        // Header: title + a close (×) button, like the settings window's chrome.
-        var header = new DockPanel { Margin = new Thickness(0, 0, 0, 10) };
+        // Titlebar: caption on the left, close glyph on the right, like the settings modal.
+        var titlebar = new DockPanel();
         var close = new Button
         {
             Content = "✕",
-            Width = 20,
-            Height = 20,
-            Padding = new Thickness(0),
-            Background = Brushes.Transparent,
-            BorderThickness = new Thickness(0),
-            Foreground = Brushes.White,
-            FontSize = 13,
-            Cursor = System.Windows.Input.Cursors.Hand,
+            Style = (Style)FindResource("VguiCloseButton"),
             VerticalAlignment = VerticalAlignment.Top,
         };
-        close.MouseEnter += (_, _) => close.Foreground = new SolidColorBrush(Teal);
-        close.MouseLeave += (_, _) => close.Foreground = Brushes.White;
         close.Click += (_, _) => Finish(_system.IsChecked == true, _mic.IsChecked == true);
         DockPanel.SetDock(close, Dock.Right);
-        header.Children.Add(close);
-        header.Children.Add(new TextBlock
+        titlebar.Children.Add(close);
+        titlebar.Children.Add(new TextBlock
+        {
+            Text = "AUDIO TRACKS",
+            Style = (Style)FindResource("VguiDialogTitle"),
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        stack.Children.Add(titlebar);
+
+        stack.Children.Add(new TextBlock
         {
             Text = "Which audio do you want to keep?",
-            Foreground = Brushes.White,
-            FontSize = 14,
-            FontWeight = FontWeights.Bold,
-            TextWrapping = TextWrapping.Wrap,
+            Style = (Style)FindResource("VguiBody"),
+            Margin = new Thickness(0, 12, 0, 6),
         });
-        stack.Children.Add(header);
         stack.Children.Add(_system);
         stack.Children.Add(_mic);
-        stack.Children.Add(Rule());
+
+        stack.Children.Add(new Separator
+        {
+            Style = (Style)FindResource("VguiSeparator"),
+            Margin = new Thickness(0, 12, 0, 6),
+        });
         stack.Children.Add(_never);
 
-        var buttons = new StackPanel
+        var save = new Button
+        {
+            Content = "Save",
+            Style = (Style)FindResource("VguiDialogButton"),
+        };
+        save.Click += (_, _) => Finish(_system.IsChecked == true, _mic.IsChecked == true);
+        stack.Children.Add(new StackPanel
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 12, 0, 0),
-        };
-        var save = MakeButton("Save");
-        save.Click += (_, _) => Finish(_system.IsChecked == true, _mic.IsChecked == true);
-        buttons.Children.Add(save);
-        stack.Children.Add(buttons);
+            Margin = new Thickness(0, 14, 0, 0),
+            Children = { save },
+        });
 
         Content = new Border
         {
-            Background = new SolidColorBrush(Color.FromArgb(0xF2, PanelGrey.R, PanelGrey.G, PanelGrey.B)),
-            BorderBrush = new SolidColorBrush(Bevel),
-            BorderThickness = new Thickness(1, 1, 0, 0),
-            Child = new Border
-            {
-                BorderBrush = new SolidColorBrush(BevelDark),
-                BorderThickness = new Thickness(0, 0, 1, 1),
-                Padding = new Thickness(14),
-                Child = stack,
-            },
+            Background = (Brush)FindResource("VguiPanel"),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(16),
+            Child = stack,
         };
 
         // Bottom-right of the primary monitor's working area (clear of the taskbar).
@@ -136,61 +140,15 @@ public sealed class AudioTrackPrompt : Window
             Close();
     }
 
-    private static CheckBox MakeCheck(string text, bool isChecked, bool enabled) => new()
+    /// <summary>
+    /// A track that was never captured still gets a row, disabled: the absence of a
+    /// microphone track is information, and a row that silently vanishes is not.
+    /// </summary>
+    private CheckBox MakeCheck(string text, bool isChecked, bool enabled) => new()
     {
-        Content = new TextBlock { Text = text, Foreground = Brushes.White, FontSize = 13 },
+        Content = text,
+        Style = (Style)FindResource("VguiCheckBox"),
         IsChecked = isChecked,
         IsEnabled = enabled,
-        Opacity = enabled ? 1.0 : 0.45,
-        Margin = new Thickness(0, 3, 0, 3),
     };
-
-    private static UIElement Rule() => new StackPanel
-    {
-        Margin = new Thickness(0, 8, 0, 6),
-        Children =
-        {
-            new Border { Height = 1, Background = new SolidColorBrush(BevelDark) },
-            new Border { Height = 1, Background = new SolidColorBrush(Bevel) },
-        },
-    };
-
-    /// <summary>A raised Source-style button: light top-left bevel over a dark bottom-right one.</summary>
-    private static Button MakeButton(string text)
-    {
-        var label = new TextBlock
-        {
-            Text = text,
-            Foreground = Brushes.White,
-            FontSize = 13,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-
-        var btn = new Button
-        {
-            MinWidth = 86,
-            Padding = new Thickness(0),
-            Background = Brushes.Transparent,
-            BorderThickness = new Thickness(0),
-            Cursor = System.Windows.Input.Cursors.Hand,
-            // WPF can't colour border sides individually, so the bevel is two nested Borders.
-            Content = new Border
-            {
-                Background = new SolidColorBrush(Color.FromRgb(0x7B, 0x7B, 0x7B)),
-                BorderBrush = new SolidColorBrush(Bevel),
-                BorderThickness = new Thickness(1, 1, 0, 0),
-                Child = new Border
-                {
-                    BorderBrush = new SolidColorBrush(BevelDark),
-                    BorderThickness = new Thickness(0, 0, 1, 1),
-                    Padding = new Thickness(18, 5, 18, 5),
-                    Child = label,
-                },
-            },
-        };
-        btn.MouseEnter += (_, _) => label.Foreground = new SolidColorBrush(Teal);
-        btn.MouseLeave += (_, _) => label.Foreground = Brushes.White;
-        return btn;
-    }
 }

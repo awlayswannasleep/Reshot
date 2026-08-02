@@ -13,8 +13,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Media Foundation SinkWriter for hardware H.264 → MP4 (ARCHITECTURE §9). -->
-    <PackageReference Include="Vortice.MediaFoundation" Version="3.6.2" />
     <!-- WASAPI loopback (system audio) + microphone capture. -->
     <PackageReference Include="NAudio" Version="2.2.1" />
   </ItemGroup>

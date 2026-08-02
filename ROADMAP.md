@@ -1,6 +1,6 @@
 # Reshot roadmap
 
-**Status as of 2026-07-28: phases 0 to 6 are done and version 1.0.0 is released.**
+**Status as of 2026-08-02: phases 0 to 6 are done and version 1.0.2 is released.**
 
 The project was built in phases, each one ending with a program you could actually use.
 This file is the record of that, plus what is left.

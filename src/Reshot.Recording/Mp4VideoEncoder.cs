@@ -1,230 +1,214 @@
-using System.Runtime.InteropServices;
+using System.Diagnostics;
 using Reshot.Core.Diagnostics;
-using Vortice.MediaFoundation;
 
 namespace Reshot.Recording;
 
 /// <summary>
-/// Hardware H.264 → MP4 encoder built on the Media Foundation SinkWriter
-/// (ARCHITECTURE §9). Frames are pushed as top-down BGRA (RGB32); the SinkWriter's
-/// encoder MFT converts to NV12 and does the H.264 encode, using the GPU when the
-/// driver exposes a hardware transform. One instance = one output file.
+/// Streams top-down BGRA frames to ffmpeg for H.264 encoding. ffmpeg owns the
+/// BGRA-to-YUV conversion so the capture thread no longer spends CPU time walking
+/// every pixel before the selected hardware encoder can receive the frame.
 /// </summary>
 public sealed class Mp4VideoEncoder : IDisposable
 {
-    private const int Progressive = 2; // MFVideoInterlace_Progressive
+    private const int FinalizeTimeoutMs = 30_000;
 
-    private readonly IMFSinkWriter _writer;
-    private readonly int _streamIndex;
-    private readonly int _width;
-    private readonly int _height;
-    private readonly int _rowBytes;
-    private readonly long _frameDuration100Ns;
-    private readonly byte[] _nv12;
+    private readonly string _outputPath;
+    private readonly string _videoPath;
+    private readonly string? _audioPcmPath;
+    private readonly AudioConfig? _audioConfig;
+    private readonly Process _process;
+    private readonly Stream _videoInput;
+    private readonly FileStream? _audioPcm;
+    private readonly int _frameBytes;
     private long _frameIndex;
-    private bool _disposed;
-
-    private readonly object _writeLock = new();
-    private readonly int _audioStreamIndex = -1;
-    private readonly int _audioSampleRate;
-    private readonly int _audioBytesPerFrame; // channels * 2 (16-bit)
     private long _audioFramesWritten;
+    private bool _disposed;
 
     /// <summary>Optional PCM audio track config (16-bit); null = video only.</summary>
     public sealed record AudioConfig(int SampleRate, int Channels, int Bitrate);
 
-    public bool HasAudio => _audioStreamIndex >= 0;
+    public bool HasAudio => _audioConfig is not null;
 
-    public Mp4VideoEncoder(string path, int width, int height, int fps, int bitrate, AudioConfig? audio = null)
+    public Mp4VideoEncoder(
+        string path,
+        int width,
+        int height,
+        int fps,
+        int bitrate,
+        AudioConfig? audio = null)
     {
-        // Encoders want even dimensions; round down.
-        _width = width & ~1;
-        _height = height & ~1;
-        _rowBytes = _width * 4;
-        _frameDuration100Ns = 10_000_000L / fps;
+        // H.264 4:2:0 requires even dimensions; VideoRecorder already crops the
+        // matching frame buffer, while this keeps direct callers equally safe.
+        var encodedWidth = width & ~1;
+        var encodedHeight = height & ~1;
+        if (encodedWidth <= 0 || encodedHeight <= 0)
+            throw new ArgumentOutOfRangeException(nameof(width), "Video dimensions must contain at least one even 2x2 block.");
+        if (fps <= 0)
+            throw new ArgumentOutOfRangeException(nameof(fps));
 
-        MediaFactory.MFStartup(false); // false = full startup (not lite)
+        _outputPath = path;
+        _audioConfig = audio;
+        _frameBytes = checked(encodedWidth * encodedHeight * 4);
 
-        var attributes = MediaFactory.MFCreateAttributes(1);
-        // Prefer the GPU H.264 encoder (NVENC/AMF/QSV) when the driver exposes one.
-        attributes.Set(SinkWriterAttributeKeys.ReadwriteEnableHardwareTransforms, 1u);
-        _writer = MediaFactory.MFCreateSinkWriterFromURL(path, null, attributes);
-
-        using (var outType = MediaFactory.MFCreateMediaType())
+        if (audio is null)
         {
-            outType.Set(MediaTypeAttributeKeys.MajorType, MediaTypeGuids.Video);
-            outType.Set(MediaTypeAttributeKeys.Subtype, VideoFormatGuids.H264);
-            outType.Set(MediaTypeAttributeKeys.AvgBitrate, (uint)bitrate);
-            outType.Set(MediaTypeAttributeKeys.InterlaceMode, (uint)Progressive);
-            outType.Set(MediaTypeAttributeKeys.FrameSize, Pack(_width, _height));
-            outType.Set(MediaTypeAttributeKeys.FrameRate, Pack(fps, 1));
-            outType.Set(MediaTypeAttributeKeys.PixelAspectRatio, Pack(1, 1));
-            _streamIndex = _writer.AddStream(outType);
+            _videoPath = path;
+        }
+        else
+        {
+            var stamp = Guid.NewGuid().ToString("N");
+            _videoPath = Path.Combine(Path.GetTempPath(), $"reshot_{stamp}_video.mp4");
+            _audioPcmPath = Path.Combine(Path.GetTempPath(), $"reshot_{stamp}_audio.pcm");
+            _audioPcm = File.Create(_audioPcmPath);
         }
 
-        using (var inType = MediaFactory.MFCreateMediaType())
+        try
         {
-            // NV12 fed straight to the H.264 encoder, no auto color-converter MFT.
-            inType.Set(MediaTypeAttributeKeys.MajorType, MediaTypeGuids.Video);
-            inType.Set(MediaTypeAttributeKeys.Subtype, VideoFormatGuids.NV12);
-            inType.Set(MediaTypeAttributeKeys.InterlaceMode, (uint)Progressive);
-            inType.Set(MediaTypeAttributeKeys.FrameSize, Pack(_width, _height));
-            inType.Set(MediaTypeAttributeKeys.FrameRate, Pack(fps, 1));
-            inType.Set(MediaTypeAttributeKeys.PixelAspectRatio, Pack(1, 1));
-            _writer.SetInputMediaType(_streamIndex, inType, null);
+            var encoder = Ffmpeg.SelectH264Encoder(encodedWidth, encodedHeight);
+            _process = Ffmpeg.Start(
+                FfmpegArgs.Video(encodedWidth, encodedHeight, fps, bitrate, encoder, _videoPath),
+                redirectStdin: true);
+            _videoInput = _process.StandardInput.BaseStream;
+            Log.Info($"Encoder: ffmpeg/{encoder} {encodedWidth}x{encodedHeight} @ {fps}fps, {bitrate / 1000}kbps"
+                     + (audio is not null ? $" + deferred AAC {audio.SampleRate}Hz/{audio.Channels}ch" : "")
+                     + $" → {path}");
         }
-
-        _nv12 = new byte[_width * _height * 3 / 2];
-
-        if (audio is not null)
+        catch
         {
-            _audioSampleRate = audio.SampleRate;
-            _audioBytesPerFrame = audio.Channels * 2;
-
-            using (var aacOut = MediaFactory.MFCreateMediaType())
-            {
-                aacOut.Set(MediaTypeAttributeKeys.MajorType, MediaTypeGuids.Audio);
-                aacOut.Set(MediaTypeAttributeKeys.Subtype, AudioFormatGuids.Aac);
-                aacOut.Set(MediaTypeAttributeKeys.AudioBitsPerSample, 16u);
-                aacOut.Set(MediaTypeAttributeKeys.AudioSamplesPerSecond, (uint)audio.SampleRate);
-                aacOut.Set(MediaTypeAttributeKeys.AudioNumChannels, (uint)audio.Channels);
-                aacOut.Set(MediaTypeAttributeKeys.AudioAvgBytesPerSecond, (uint)(audio.Bitrate / 8));
-                _audioStreamIndex = _writer.AddStream(aacOut);
-            }
-
-            using (var pcmIn = MediaFactory.MFCreateMediaType())
-            {
-                pcmIn.Set(MediaTypeAttributeKeys.MajorType, MediaTypeGuids.Audio);
-                pcmIn.Set(MediaTypeAttributeKeys.Subtype, AudioFormatGuids.Pcm);
-                pcmIn.Set(MediaTypeAttributeKeys.AudioBitsPerSample, 16u);
-                pcmIn.Set(MediaTypeAttributeKeys.AudioSamplesPerSecond, (uint)audio.SampleRate);
-                pcmIn.Set(MediaTypeAttributeKeys.AudioNumChannels, (uint)audio.Channels);
-                pcmIn.Set(MediaTypeAttributeKeys.AudioBlockAlignment, (uint)_audioBytesPerFrame);
-                pcmIn.Set(MediaTypeAttributeKeys.AudioAvgBytesPerSecond, (uint)(audio.SampleRate * _audioBytesPerFrame));
-                _writer.SetInputMediaType(_audioStreamIndex, pcmIn, null);
-            }
+            _audioPcm?.Dispose();
+            DeleteIfPresent(_audioPcmPath);
+            if (audio is not null)
+                DeleteIfPresent(_videoPath);
+            throw;
         }
-
-        _writer.BeginWriting();
-        Log.Info($"Encoder: MP4/H.264 {_width}x{_height} @ {fps}fps, {bitrate / 1000}kbps"
-                 + (audio is not null ? $" + AAC {audio.SampleRate}Hz/{audio.Channels}ch" : "") + $" → {path}");
     }
 
     /// <summary>
-    /// Writes one frame. <paramref name="bgra"/> is top-down BGRA of the encoder
-    /// size (its stride must equal the encoder width*4). Rows are copied bottom-up
-    /// because MF RGB32 is bottom-up by default.
+    /// Writes one top-down BGRA frame whose tightly packed stride is width*4.
+    /// Rawvideo is implicitly constant-frame-rate, so timestamps remain the
+    /// caller's responsibility and no timing work occurs on this hot path.
     /// </summary>
     public void WriteFrame(ReadOnlySpan<byte> bgra)
     {
-        BgraToNv12(bgra, _nv12);
-        var length = _nv12.Length;
-        var buffer = MediaFactory.MFCreateMemoryBuffer(length);
-        buffer.Lock(out var dest, out _, out _);
-        try
-        {
-            Marshal.Copy(_nv12, 0, dest, length);
-        }
-        finally
-        {
-            buffer.Unlock();
-        }
-        buffer.CurrentLength = length;
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (bgra.Length != _frameBytes)
+            throw new ArgumentException($"Expected exactly {_frameBytes} BGRA bytes, got {bgra.Length}.", nameof(bgra));
 
-        var sample = MediaFactory.MFCreateSample();
-        sample.AddBuffer(buffer);
-        sample.SampleTime = _frameIndex * _frameDuration100Ns;
-        sample.SampleDuration = _frameDuration100Ns;
-        lock (_writeLock)
-            _writer.WriteSample(_streamIndex, sample);
+        _videoInput.Write(bgra);
         _frameIndex++;
-
-        sample.Dispose();
-        buffer.Dispose();
     }
 
     /// <summary>
-    /// Writes 16-bit interleaved PCM to the audio track. <paramref name="byteCount"/>
-    /// must be a whole number of frames. Timestamps run off a dedicated audio clock
-    /// (samples written / sample rate). No-op if the encoder has no audio track.
+    /// Writes 16-bit interleaved PCM for the optional audio track. A temporary PCM
+    /// file is intentional: ffmpeg has only one stdin, so audio is muxed after the
+    /// video process finishes without changing the public encoder contract.
     /// </summary>
     public void WriteAudio(byte[] pcm, int byteCount)
     {
-        if (_audioStreamIndex < 0 || byteCount <= 0)
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (_audioPcm is null || byteCount <= 0)
             return;
+        if ((uint)byteCount > (uint)pcm.Length)
+            throw new ArgumentOutOfRangeException(nameof(byteCount));
 
-        var buffer = MediaFactory.MFCreateMemoryBuffer(byteCount);
-        buffer.Lock(out var dest, out _, out _);
-        try
-        {
-            Marshal.Copy(pcm, 0, dest, byteCount);
-        }
-        finally
-        {
-            buffer.Unlock();
-        }
-        buffer.CurrentLength = byteCount;
-
-        var frames = byteCount / _audioBytesPerFrame;
-        var sample = MediaFactory.MFCreateSample();
-        sample.AddBuffer(buffer);
-        sample.SampleTime = _audioFramesWritten * 10_000_000L / _audioSampleRate;
-        sample.SampleDuration = (long)frames * 10_000_000L / _audioSampleRate;
-        lock (_writeLock)
-            _writer.WriteSample(_audioStreamIndex, sample);
-        _audioFramesWritten += frames;
-
-        sample.Dispose();
-        buffer.Dispose();
+        _audioPcm.Write(pcm, 0, byteCount);
+        _audioFramesWritten += byteCount / (_audioConfig!.Channels * 2);
     }
-
-    /// <summary>Converts top-down BGRA (stride width*4) to NV12 (BT.601, integer math).</summary>
-    private void BgraToNv12(ReadOnlySpan<byte> bgra, byte[] nv12)
-    {
-        int w = _width, h = _height, uvStart = w * h;
-        for (var y = 0; y < h; y++)
-        {
-            var row = y * _rowBytes;
-            var yRow = y * w;
-            for (var x = 0; x < w; x++)
-            {
-                var i = row + x * 4;
-                int b = bgra[i], g = bgra[i + 1], r = bgra[i + 2];
-                nv12[yRow + x] = Clamp(((66 * r + 129 * g + 25 * b + 128) >> 8) + 16);
-            }
-        }
-        for (var y = 0; y < h; y += 2)
-        {
-            for (var x = 0; x < w; x += 2)
-            {
-                var i = y * _rowBytes + x * 4;
-                int b = bgra[i], g = bgra[i + 1], r = bgra[i + 2];
-                var uv = uvStart + (y / 2) * w + (x / 2) * 2;
-                nv12[uv] = Clamp(((-38 * r - 74 * g + 112 * b + 128) >> 8) + 128);
-                nv12[uv + 1] = Clamp(((112 * r - 94 * g - 18 * b + 128) >> 8) + 128);
-            }
-        }
-    }
-
-    private static byte Clamp(int v) => (byte)(v < 0 ? 0 : v > 255 ? 255 : v);
-
-    /// <summary>Packs two 32-bit values into the UINT64 layout MF uses for size/rate attributes.</summary>
-    private static ulong Pack(int high, int low) => ((ulong)(uint)high << 32) | (uint)low;
 
     public void Dispose()
     {
         if (_disposed)
             return;
         _disposed = true;
+
+        Exception? closeError = null;
         try
         {
-            _writer.Finalize();
-            _writer.Dispose();
+            _videoInput.Close();
         }
-        finally
+        catch (Exception ex)
         {
-            MediaFactory.MFShutdown();
+            closeError = ex;
+            Log.Error("Encoder: failed to close ffmpeg input", ex);
         }
+
+        _audioPcm?.Dispose();
+
+        var videoOk = Ffmpeg.WaitForSuccessfulExit(_process, FinalizeTimeoutMs, out var exitCode);
+        _process.Dispose();
+        var videoHasContent = HasContent(_videoPath);
+        if (!videoOk || closeError is not null || !videoHasContent)
+        {
+            var reason = closeError is not null
+                ? "input pipe failed"
+                : exitCode is null
+                    ? "timed out"
+                    : exitCode != 0
+                        ? $"exited with code {exitCode}"
+                        : "produced no output";
+            Log.Error($"Encoder: ffmpeg {reason} after {_frameIndex} frames; discarding incomplete output '{_videoPath}'.");
+            DeleteIfPresent(_videoPath);
+            DeleteIfPresent(_audioPcmPath);
+            return;
+        }
+
+        if (_audioConfig is not null)
+        {
+            IReadOnlyList<string> tracks = _audioFramesWritten > 0
+                ? new[] { _audioPcmPath! }
+                : Array.Empty<string>();
+            var muxed = Ffmpeg.Run(
+                FfmpegArgs.Mux(
+                    _videoPath,
+                    tracks,
+                    _outputPath,
+                    _audioConfig.SampleRate,
+                    _audioConfig.Channels,
+                    _audioConfig.Bitrate),
+                out var stderrTail);
+
+            if (!muxed || !HasContent(_outputPath))
+            {
+                Log.Error($"Encoder: ffmpeg audio mux failed for '{_outputPath}': {stderrTail}");
+                DeleteIfPresent(_outputPath);
+            }
+            else
+            {
+                Log.Info($"Encoder: finalized {_frameIndex} frames and {_audioFramesWritten} audio frames.");
+            }
+
+            DeleteIfPresent(_videoPath);
+            DeleteIfPresent(_audioPcmPath);
+            return;
+        }
+
         Log.Info($"Encoder: finalized {_frameIndex} frames.");
+    }
+
+    private static bool HasContent(string path)
+    {
+        try
+        {
+            return File.Exists(path) && new FileInfo(path).Length > 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static void DeleteIfPresent(string? path)
+    {
+        if (path is null)
+            return;
+        try
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"Encoder: could not delete incomplete file '{path}': {ex.Message}");
+        }
     }
 }

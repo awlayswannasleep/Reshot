@@ -5,5 +5,13 @@
              ShutdownMode="OnExplicitShutdown">
     <!-- No StartupUri: Reshot is a tray app with no main window. The overlay
          (Phase 1) is constructed lazily on first capture, per ARCHITECTURE §7. -->
-    <Application.Resources />
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <!-- Shared Source VGUI styles. Every entry is keyed, so merging this
+                     restyles nothing on its own; a window opts in per control. -->
+                <ResourceDictionary Source="Theme/SourceVgui.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
 </Application>

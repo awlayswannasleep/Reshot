@@ -53,8 +53,22 @@ jobs:
       - name: Install Inno Setup
         run: choco install innosetup --no-progress -y
 
+      - name: Cache pinned FFmpeg package
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}\reshot-ffmpeg-cache
+          key: ${{ runner.os }}-ffmpeg-${{ hashFiles('build/fetch-ffmpeg.ps1') }}
+
+      - name: Fetch pinned FFmpeg
+        shell: pwsh
+        env:
+          RESHOT_FFMPEG_CACHE_DIR: ${{ runner.temp }}\reshot-ffmpeg-cache
+        run: pwsh build/fetch-ffmpeg.ps1
+
       - name: Build release artifacts
         shell: pwsh
+        env:
+          RESHOT_FFMPEG_CACHE_DIR: ${{ runner.temp }}\reshot-ffmpeg-cache
         run: pwsh build/build-release.ps1 -Version ${{ steps.version.outputs.value }}
 
       - name: Upload artifacts to the workflow run

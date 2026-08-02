@@ -1,85 +1,43 @@
-using System.Runtime.InteropServices;
+using System.Diagnostics;
 using Reshot.Core.Diagnostics;
-using Vortice.MediaFoundation;
 
 namespace Reshot.Recording;
 
 /// <summary>
-/// Audio-only AAC → M4A encoder (Media Foundation SinkWriter), for the standalone
-/// audio-recording tool. Fed 16-bit interleaved PCM; timestamps run off a sample
-/// clock. Mirrors the audio path of <see cref="Mp4VideoEncoder"/>.
+/// Streams 16-bit interleaved PCM to ffmpeg for the standalone M4A recorder.
+/// Keeping the pipe open for the recording lifetime avoids temporary audio data
+/// and lets closing stdin serve as the single, deterministic end-of-stream signal.
 /// </summary>
 public sealed class M4aAudioEncoder : IDisposable
 {
-    private readonly IMFSinkWriter _writer;
-    private readonly int _streamIndex;
-    private readonly int _sampleRate;
+    private const int FinalizeTimeoutMs = 30_000;
+
+    private readonly string _path;
+    private readonly Process _process;
+    private readonly Stream _input;
     private readonly int _bytesPerFrame;
     private long _framesWritten;
     private bool _disposed;
 
     public M4aAudioEncoder(string path, int sampleRate, int channels, int bitrate)
     {
-        _sampleRate = sampleRate;
-        _bytesPerFrame = channels * 2;
-
-        MediaFactory.MFStartup(false);
-        _writer = MediaFactory.MFCreateSinkWriterFromURL(path, null, null);
-
-        using (var aacOut = MediaFactory.MFCreateMediaType())
-        {
-            aacOut.Set(MediaTypeAttributeKeys.MajorType, MediaTypeGuids.Audio);
-            aacOut.Set(MediaTypeAttributeKeys.Subtype, AudioFormatGuids.Aac);
-            aacOut.Set(MediaTypeAttributeKeys.AudioBitsPerSample, 16u);
-            aacOut.Set(MediaTypeAttributeKeys.AudioSamplesPerSecond, (uint)sampleRate);
-            aacOut.Set(MediaTypeAttributeKeys.AudioNumChannels, (uint)channels);
-            aacOut.Set(MediaTypeAttributeKeys.AudioAvgBytesPerSecond, (uint)(bitrate / 8));
-            _streamIndex = _writer.AddStream(aacOut);
-        }
-
-        using (var pcmIn = MediaFactory.MFCreateMediaType())
-        {
-            pcmIn.Set(MediaTypeAttributeKeys.MajorType, MediaTypeGuids.Audio);
-            pcmIn.Set(MediaTypeAttributeKeys.Subtype, AudioFormatGuids.Pcm);
-            pcmIn.Set(MediaTypeAttributeKeys.AudioBitsPerSample, 16u);
-            pcmIn.Set(MediaTypeAttributeKeys.AudioSamplesPerSecond, (uint)sampleRate);
-            pcmIn.Set(MediaTypeAttributeKeys.AudioNumChannels, (uint)channels);
-            pcmIn.Set(MediaTypeAttributeKeys.AudioBlockAlignment, (uint)_bytesPerFrame);
-            pcmIn.Set(MediaTypeAttributeKeys.AudioAvgBytesPerSecond, (uint)(sampleRate * _bytesPerFrame));
-            _writer.SetInputMediaType(_streamIndex, pcmIn, null);
-        }
-
-        _writer.BeginWriting();
-        Log.Info($"Audio encoder: AAC {sampleRate}Hz/{channels}ch → {path}");
+        _path = path;
+        _bytesPerFrame = checked(channels * 2);
+        _process = Ffmpeg.Start(FfmpegArgs.Audio(sampleRate, channels, bitrate, path), redirectStdin: true);
+        _input = _process.StandardInput.BaseStream;
+        Log.Info($"Audio encoder: ffmpeg/AAC {sampleRate}Hz/{channels}ch → {path}");
     }
 
     public void WriteAudio(byte[] pcm, int byteCount)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         if (byteCount <= 0)
             return;
+        if ((uint)byteCount > (uint)pcm.Length)
+            throw new ArgumentOutOfRangeException(nameof(byteCount));
 
-        var buffer = MediaFactory.MFCreateMemoryBuffer(byteCount);
-        buffer.Lock(out var dest, out _, out _);
-        try
-        {
-            Marshal.Copy(pcm, 0, dest, byteCount);
-        }
-        finally
-        {
-            buffer.Unlock();
-        }
-        buffer.CurrentLength = byteCount;
-
-        var frames = byteCount / _bytesPerFrame;
-        var sample = MediaFactory.MFCreateSample();
-        sample.AddBuffer(buffer);
-        sample.SampleTime = _framesWritten * 10_000_000L / _sampleRate;
-        sample.SampleDuration = (long)frames * 10_000_000L / _sampleRate;
-        _writer.WriteSample(_streamIndex, sample);
-        _framesWritten += frames;
-
-        sample.Dispose();
-        buffer.Dispose();
+        _input.Write(pcm, 0, byteCount);
+        _framesWritten += byteCount / _bytesPerFrame;
     }
 
     public void Dispose()
@@ -87,15 +45,60 @@ public sealed class M4aAudioEncoder : IDisposable
         if (_disposed)
             return;
         _disposed = true;
+
+        Exception? closeError = null;
         try
         {
-            _writer.Finalize();
-            _writer.Dispose();
+            _input.Close();
         }
-        finally
+        catch (Exception ex)
         {
-            MediaFactory.MFShutdown();
+            closeError = ex;
+            Log.Error("Audio encoder: failed to close ffmpeg input", ex);
         }
+
+        var ok = Ffmpeg.WaitForSuccessfulExit(_process, FinalizeTimeoutMs, out var exitCode);
+        _process.Dispose();
+        var hasContent = HasContent(_path);
+        if (!ok || closeError is not null || !hasContent)
+        {
+            var reason = closeError is not null
+                ? "input pipe failed"
+                : exitCode is null
+                    ? "timed out"
+                    : exitCode != 0
+                        ? $"exited with code {exitCode}"
+                        : "produced no output";
+            Log.Error($"Audio encoder: ffmpeg {reason} after {_framesWritten} frames; discarding incomplete output '{_path}'.");
+            DeleteIncompleteOutput();
+            return;
+        }
+
         Log.Info($"Audio encoder: finalized {_framesWritten} frames.");
+    }
+
+    private bool HasContent(string path)
+    {
+        try
+        {
+            return File.Exists(path) && new FileInfo(path).Length > 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private void DeleteIncompleteOutput()
+    {
+        try
+        {
+            if (File.Exists(_path))
+                File.Delete(_path);
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"Audio encoder: could not delete incomplete output '{_path}': {ex.Message}");
+        }
     }
 }

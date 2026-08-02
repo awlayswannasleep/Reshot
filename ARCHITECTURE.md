@@ -10,8 +10,9 @@ for that situation:
   Rust, fighting the borrow checker as a beginner stretches every phase severalfold.
 - There is a huge amount of open source to learn from. **ShareX** (C#) is effectively a
   reference implementation of half of Reshot.
-- First-class access to the Windows API: Windows.Graphics.Capture, WASAPI, Media
-  Foundation, the registry, the tray. All of it is either in the BCL or one NuGet away.
+- First-class access to the Windows API: Windows.Graphics.Capture, DXGI Desktop
+  Duplication, WASAPI, the registry, the tray. All of it is either in the BCL or one NuGet
+  away.
 - Performance is more than sufficient. The frame is frozen, so editing is operations on a
   single bitmap rather than a GPU render every frame.
 
@@ -31,7 +32,7 @@ session and 25 to 30 MB in the background. That is normal for a utility, and the
 | Tray | `NotifyIcon` (WinForms interop) | Standard |
 | Settings | `System.Text.Json` writing `%AppData%\reshot\settings.json` | Shared with the settings window |
 | Settings window | **Tauri 2** (Rust + TypeScript), a separate process | Styling the Source-like dialog in HTML and CSS beats fighting WPF for it |
-| Video | Media Foundation `SinkWriter` (hardware H.264: NVENC, AMF, QSV) plus WASAPI through NAudio | No bundled ffmpeg, which saves about 80 MB |
+| Video | A bundled ffmpeg: BGRA frames piped in as rawvideo, H.264 encode (`h264_nvenc` / `h264_amf` / `h264_qsv` when available, `libx264` otherwise), AAC encode and final mux; WASAPI through NAudio for the audio capture | Bundled ffmpeg costs about 145 MB per artifact and brings a GPL licence obligation (§9) |
 | Text recognition | `Windows.Media.Ocr` | Offline, no models to ship, already part of the OS |
 
 ### Key NuGet packages
@@ -40,7 +41,6 @@ session and 25 to 30 MB in the background. That is normal for a utility, and the
 SkiaSharp
 SkiaSharp.Views.WPF
 Vortice.Direct3D11        (capture)
-Vortice.MediaFoundation   (recording)
 NAudio                    (audio)
 ```
 
@@ -61,7 +61,7 @@ reshot/
 │   │   ├── History/
 │   │   └── Export/
 │   ├── Reshot.Capture/        Windows.Graphics.Capture wrapper
-│   ├── Reshot.Recording/      Media Foundation plus WASAPI
+│   ├── Reshot.Recording/      ffmpeg shell-out plus WASAPI
 │   └── reshot-tauri/          settings window (Tauri 2)
 ├── build/                     release scripts and the installer
 └── tests/Reshot.Core.Tests/
@@ -197,13 +197,24 @@ Editing → Recording → Idle
 ## 9. Video
 
 - Live capture through the same Windows.Graphics.Capture frame pool, cropped to the
-  selection and fed to a Media Foundation `SinkWriter` with hardware H.264.
+  selection. The frames go to ffmpeg as BGRA rawvideo on its stdin; ffmpeg does the H.264
+  encode — hardware `h264_nvenc` / `h264_amf` / `h264_qsv` when available, `libx264`
+  otherwise — the AAC encode and the final mux.
+- The frames are piped rather than letting ffmpeg capture the screen itself (ddagrab)
+  because everything that makes a Reshot recording what it is lives on the C# side and
+  cannot survive a capture owned by ffmpeg: the selection can be any shape, so the mask is
+  applied before frames leave the process; per-application audio is Windows process
+  loopback; and the two tracks must stay separate until the user picks.
 - Audio: independent WASAPI streams (loopback for system sound, capture for the
   microphone, process loopback for individual applications). Each source is written to its
   **own raw PCM file** during the recording.
-- On stop, the chosen tracks are mixed and muxed into the final MP4. The video is copied
-  through without re-encoding, so choosing tracks costs no quality and little time. This is
-  what makes the post-recording track picker honest: nothing is mixed until the user picks.
+- On stop, the chosen tracks are piped to ffmpeg too and encoded to AAC as the final MP4 is
+  muxed. The video is already encoded, so picking tracks costs no video quality and little
+  time. This is what makes the post-recording track picker honest: nothing is mixed until
+  the user picks.
+- The price of not writing our own encoder: about 145 MB of ffmpeg in every artifact, and a
+  GPL binary inside an otherwise MIT project. The binary's licence and the source offer are
+  shipped in `THIRD-PARTY-NOTICES.md`.
 - The recording indicator is a separate small topmost window, and the corner brackets are a
   click-through window with a transparent background.
 - Stop is the same global hotkey, which the router interprets as Stop while recording.
@@ -213,6 +224,10 @@ Editing → Recording → Idle
 - A portable ZIP and an Inno Setup installer, both produced by `build/build-release.ps1`.
   The installer is per user and needs no administrator rights.
 - The application is published self-contained, so no .NET runtime is required.
+- A GPL `ffmpeg.exe` is bundled with the installer and the portable ZIP. It is what
+  records, it adds roughly 145 MB, and it carries a licence obligation Reshot does not
+  share: the binary is GPL even though Reshot stays MIT, so its licence and the source
+  offer are shipped in `THIRD-PARTY-NOTICES.md`.
 - There is no code signing (open source, no budget), so SmartScreen will complain at first.
   The README explains it.
 - **Automatic updates are not implemented.** Velopack was planned and the `update.auto`

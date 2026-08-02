@@ -3,6 +3,36 @@
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.0.2] - 2026-08-02
+
+### Changed
+
+- Recording no longer uses Media Foundation. BGRA frames are piped into a bundled ffmpeg
+  as rawvideo, and ffmpeg does the H.264 encode — hardware `h264_nvenc` / `h264_amf` /
+  `h264_qsv` when available, `libx264` otherwise — the AAC encode and the final mux.
+- ffmpeg is now bundled in the installer and the portable ZIP (a GPL build), which adds
+  about 145 MB to every release artifact. Reshot stays MIT; the binary's licence and the
+  source offer are in `THIRD-PARTY-NOTICES.md`.
+- The audio-track prompt shown after a recording is dressed from the same Half-Life 2
+  vocabulary as the settings window instead of the default WPF one, so its checkboxes and
+  its Save button stop looking pasted on. The shared styles now live in one place rather
+  than being restated per window.
+- The hardware encoder is chosen by a real trial encode at the dimensions of the recording
+  about to start, not by what the binary was compiled with. A GPL ffmpeg lists every
+  backend regardless of the hardware present, so asking it would have picked NVENC on an
+  AMD machine and produced no file at all. It also settles the case NVENC cannot serve: a
+  selection below its minimum frame size now falls back to `libx264` instead of failing.
+
+### Fixed
+
+- The recording HUD — the corner brackets and the REC indicator — is excluded from the
+  captured frame through `SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)`, so it no
+  longer appears in the recorded video.
+- The capture overlay no longer appears in the first frames of a recording. The monitor
+  stream opens before the overlay closes, so the frozen frame, the selection outline and
+  the toolbar were being composited into the start of every recording; the overlay is now
+  excluded from capture the same way.
+
 ## [1.0.1] - 2026-07-31
 
 ### Changed

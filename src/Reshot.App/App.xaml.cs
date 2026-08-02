@@ -467,6 +467,18 @@ public partial class App : System.Windows.Application
         if (_recording || _capture is null || _settingsService is null)
             return;
 
+        // Video recording shells out to ffmpeg.exe beside reshot.exe. Starting without it
+        // would raise the REC HUD and write nothing — the user only notices after stopping.
+        if (!Reshot.Recording.Ffmpeg.IsAvailable)
+        {
+            Log.Error(Reshot.Recording.Ffmpeg.MissingMessage);
+            _tray?.ShowBalloon(
+                "Reshot: recording unavailable",
+                "ffmpeg.exe is missing from the installation. Reinstall Reshot, or place ffmpeg.exe next to reshot.exe.",
+                ToolTipIcon.Error);
+            return;
+        }
+
         try
         {
             var settings = _settingsService.Current;
@@ -642,6 +654,18 @@ public partial class App : System.Windows.Application
     {
         if (_audioRecording || _recording || _settingsService is null)
             return;
+
+        // Standalone audio also shells out to ffmpeg.exe. Same early exit as video: no HUD,
+        // no temp path, no half-open recorder if the binary is gone.
+        if (!Reshot.Recording.Ffmpeg.IsAvailable)
+        {
+            Log.Error(Reshot.Recording.Ffmpeg.MissingMessage);
+            _tray?.ShowBalloon(
+                "Reshot: recording unavailable",
+                "ffmpeg.exe is missing from the installation. Reinstall Reshot, or place ffmpeg.exe next to reshot.exe.",
+                ToolTipIcon.Error);
+            return;
+        }
 
         try
         {

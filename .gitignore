@@ -12,6 +12,9 @@ publish/
 # Release artifacts produced by build/build-release.ps1
 dist/
 
+# Downloaded by build/fetch-ffmpeg.ps1; the pinned binary is never committed.
+build/ffmpeg/
+
 # ==== Editors, IDEs and local tooling ====
 # Personal configuration: never useful to anyone else, and it leaks local paths.
 .vs/

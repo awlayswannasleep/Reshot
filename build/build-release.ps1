@@ -21,6 +21,9 @@
 .PARAMETER SkipSettings
     Skip the Tauri build (slow, needs the Rust toolchain) and reuse the existing binary.
 
+.PARAMETER SkipFfmpeg
+    Skip fetching the pinned FFmpeg binary and reuse build/ffmpeg/ffmpeg.exe.
+
 .EXAMPLE
     pwsh build/build-release.ps1
     pwsh build/build-release.ps1 -Version 1.0.1 -SkipSettings
@@ -28,7 +31,8 @@
 [CmdletBinding()]
 param(
     [string]$Version,
-    [switch]$SkipSettings
+    [switch]$SkipSettings,
+    [switch]$SkipFfmpeg
 )
 
 $ErrorActionPreference = 'Stop'
@@ -59,13 +63,33 @@ foreach ($name in 'reshot', 'reshot-tauri') {
 # ---- Clean -------------------------------------------------------------------
 
 Step 'Preparing dist/'
-if (Test-Path $dist) { Remove-Item $dist -Recurse -Force }
+if (Test-Path $dist) {
+    # An Explorer window open on dist\ — or a virus scanner still reading the setup it
+    # just saw appear — holds the directory itself. A recursive delete then empties the
+    # folder and fails on the last step, taking the whole build with it. Emptying is what
+    # actually matters, so a surviving empty directory is not an error.
+    Get-ChildItem $dist -Force | Remove-Item -Recurse -Force
+    Remove-Item $dist -Force -ErrorAction SilentlyContinue
+}
 New-Item -ItemType Directory -Path $stage -Force | Out-Null
+
+# ---- FFmpeg -----------------------------------------------------------------
+
+if (-not $SkipFfmpeg) {
+    Step 'Fetching the pinned FFmpeg binary'
+    & (Join-Path $PSScriptRoot 'fetch-ffmpeg.ps1')
+}
+
+$ffmpegExe = Join-Path $PSScriptRoot 'ffmpeg/ffmpeg.exe'
+if (-not (Test-Path $ffmpegExe)) {
+    Fail "FFmpeg binary missing: $ffmpegExe (run without -SkipFfmpeg)."
+}
 
 # ---- Tests -------------------------------------------------------------------
 
 Step 'Running tests'
-dotnet test (Join-Path $repo 'tests/Reshot.Core.Tests/Reshot.Core.Tests.csproj') -c Release --nologo
+# The whole solution, so the ffmpeg command-line tests count too, not just the core ones.
+dotnet test (Join-Path $repo 'reshot.sln') -c Release --nologo
 if ($LASTEXITCODE -ne 0) { Fail 'Tests failed; refusing to package.' }
 
 # ---- App ---------------------------------------------------------------------
@@ -108,11 +132,13 @@ if (-not (Test-Path $settingsExe)) {
     Fail "Settings binary missing: $settingsExe (run without -SkipSettings)."
 }
 Copy-Item $settingsExe (Join-Path $stage 'reshot-tauri.exe') -Force
+Copy-Item $ffmpegExe (Join-Path $stage 'ffmpeg.exe') -Force
 
 # ---- Extra files -------------------------------------------------------------
 
 Copy-Item (Join-Path $repo 'LICENSE') $stage -Force
 Copy-Item (Join-Path $repo 'README.md') $stage -Force
+Copy-Item (Join-Path $repo 'THIRD-PARTY-NOTICES.md') $stage -Force
 
 # ---- Portable ZIP ------------------------------------------------------------
 
@@ -120,6 +146,33 @@ Step 'Packing the portable ZIP'
 $zip = Join-Path $dist "reshot-$Version-win-x64-portable.zip"
 Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zip -CompressionLevel Optimal
 Write-Host "  $zip"
+
+# ---- Notice text for the wizard ----------------------------------------------
+
+# The installer's info page renders plain text, so handing it the Markdown source would
+# show the reader raw '#', '**' and link syntax. One notice, two renderings: the shipped
+# file stays Markdown, the wizard gets this. Paragraphs are unwrapped so the wizard's own
+# word wrap decides the line length instead of the Markdown source's 90-column habit.
+function ConvertTo-NoticeText([string]$markdown) {
+    $lines = New-Object System.Collections.Generic.List[string]
+    foreach ($block in [regex]::Split($markdown, '(?:\r?\n){2,}')) {
+        $text = $block.Trim()
+        if (-not $text) { continue }
+        $text = (($text -split '\r?\n') | ForEach-Object { $_.Trim() }) -join ' '
+        $text = $text -replace '^#{1,6}\s*', ''                                  # headings
+        $text = $text -replace '\[([^\]]+)\]\((https?://[^)]+)\)', '$1: $2'      # external links keep the URL
+        $text = $text -replace '\[([^\]]+)\]\([^)]*\)', '$1'                     # in-repo links do not
+        $text = $text -replace '\*\*([^*]+)\*\*', '$1'
+        $text = $text -replace '`', ''
+        $lines.Add($text)
+        $lines.Add('')
+    }
+    return ($lines -join "`r`n")
+}
+
+$noticeTxt = Join-Path $dist 'THIRD-PARTY-NOTICES.txt'
+ConvertTo-NoticeText (Get-Content (Join-Path $repo 'THIRD-PARTY-NOTICES.md') -Raw) |
+    Set-Content $noticeTxt -Encoding utf8
 
 # ---- Installer ---------------------------------------------------------------
 
@@ -138,7 +191,7 @@ if (-not $iscc) {
 
 if ($iscc) {
     & $iscc.FullName (Join-Path $PSScriptRoot 'installer.iss') `
-        /DAppVersion=$Version /DPayloadDir=$stage /DOutputDir=$dist
+        /DAppVersion=$Version /DPayloadDir=$stage /DOutputDir=$dist /DNoticeFile=$noticeTxt
     if ($LASTEXITCODE -ne 0) { Fail 'Inno Setup failed.' }
     Write-Host "  $(Join-Path $dist "reshot-$Version-setup.exe")"
 }

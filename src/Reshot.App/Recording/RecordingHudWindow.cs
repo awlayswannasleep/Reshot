@@ -5,6 +5,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using System.Windows.Threading;
+using Reshot.Core.Diagnostics;
 using Brush = System.Windows.Media.Brush;
 using Brushes = System.Windows.Media.Brushes;
 using Color = System.Windows.Media.Color;
@@ -28,8 +29,13 @@ public sealed class RecordingHudWindow : Window
     private const int GwlExStyle = -20;
     private const int WsExTransparent = 0x20, WsExLayered = 0x80000, WsExToolWindow = 0x80, WsExNoActivate = 0x08000000;
 
+    // Keep this window off every screen-capture API (WGC included). Visible on the
+    // physical display; absent from captured frames. Win10 2004+ / build 19041.
+    private const uint WdaExcludeFromCapture = 0x00000011;
+
     [DllImport("user32.dll")] private static extern int GetWindowLong(IntPtr hwnd, int index);
     [DllImport("user32.dll")] private static extern int SetWindowLong(IntPtr hwnd, int index, int value);
+    [DllImport("user32.dll")] private static extern bool SetWindowDisplayAffinity(IntPtr hwnd, uint affinity);
 
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(500) };
     private readonly DateTime _start = DateTime.Now;
@@ -159,6 +165,11 @@ public sealed class RecordingHudWindow : Window
         var hwnd = new WindowInteropHelper(this).Handle;
         var ex = GetWindowLong(hwnd, GwlExStyle);
         SetWindowLong(hwnd, GwlExStyle, ex | WsExTransparent | WsExLayered | WsExToolWindow | WsExNoActivate);
+
+        // WGC composites this topmost HUD into the captured frame, so without exclusion
+        // the corner brackets and REC indicator end up burned into the MP4.
+        if (!SetWindowDisplayAffinity(hwnd, WdaExcludeFromCapture))
+            Log.Warn("Recording HUD: SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE) failed; the HUD may appear in the recording.");
     }
 
     protected override void OnClosed(EventArgs e)

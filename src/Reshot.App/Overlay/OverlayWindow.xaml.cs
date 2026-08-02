@@ -179,6 +179,12 @@ public partial class OverlayWindow : Window
     private Point _polygonCursor;
     private const double PolygonCloseThreshold = 12;
 
+    // Keep this window off every screen-capture API (WGC included). Visible on the
+    // physical display; absent from captured frames. Win10 2004+ / build 19041.
+    private const uint WdaExcludeFromCapture = 0x00000011;
+
+    [DllImport("user32.dll")] private static extern bool SetWindowDisplayAffinity(IntPtr hwnd, uint affinity);
+
     private const double HandleSize = 9;
     private readonly Dictionary<Handle, Rectangle> _handleShapes = new();
 
@@ -248,6 +254,12 @@ public partial class OverlayWindow : Window
             hwnd, NativeMethods.HWND_TOPMOST,
             _frame.VirtualLeft, _frame.VirtualTop, _frame.Width, _frame.Height,
             NativeMethods.SWP_SHOWWINDOW);
+
+        // This overlay is a fullscreen topmost window, and the recording stream starts
+        // before it closes, so without exclusion the frozen frame, selection outline and
+        // toolbar end up burned into the first frames of the MP4.
+        if (!SetWindowDisplayAffinity(hwnd, WdaExcludeFromCapture))
+            Log.Warn("Overlay: SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE) failed; the overlay may appear in the recording.");
     }
 
     private void OnLoaded(object? sender, RoutedEventArgs e)

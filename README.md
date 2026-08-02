@@ -29,7 +29,8 @@ waiting to fire. Idle, that means under 30 MB of memory and roughly 0% CPU.
 
 **Capture**
 
-- Instant snapshot of every monitor at once, through Windows.Graphics.Capture
+- Instant snapshot of every monitor at once, through DXGI Desktop Duplication, with
+  Windows.Graphics.Capture as the fallback
 - Shaped selections: rectangle, ellipse, triangle, lasso, polygon
 - Several selections at once (`Ctrl` + drag)
 - Anything outside a non-rectangular shape becomes transparent, clipboard included
@@ -53,7 +54,8 @@ waiting to fire. Idle, that means under 30 MB of memory and roughly 0% CPU.
 
 **Recording**
 
-- MP4 / H.264 with hardware encoding (NVENC, AMF, QSV)
+- MP4 / H.264, encoded by the bundled ffmpeg with hardware acceleration (NVENC, AMF, QSV)
+  when available and libx264 otherwise
 - Records a selection of any shape, not just a rectangle
 - System audio and the microphone are captured **separately**, so the tracks are chosen
   after the recording stops
@@ -76,6 +78,10 @@ Prebuilt binaries live on the [Releases](https://github.com/reteren/reshot/relea
 | `reshot-<version>-win-x64-portable.zip` | Portable build: unpack and run `reshot.exe` |
 
 No .NET runtime is required; the build is self-contained.
+
+The releases bundle a GPL build of ffmpeg (that is what records), which is what adds about
+145 MB to every artifact. Reshot itself stays MIT; the binary's licence and the source
+offer are in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
 > The application is not code signed, so SmartScreen may warn on first launch. That is
 > expected: "More info" then "Run anyway". You can verify the download against
@@ -143,7 +149,7 @@ pwsh build/build-release.ps1
 | `src/Reshot.App` | WPF shell: tray, hotkeys, overlay, OCR, export |
 | `src/Reshot.Core` | UI-free core: document model, history, settings, hotkeys |
 | `src/Reshot.Capture` | Windows.Graphics.Capture wrapper (frozen frame and live stream) |
-| `src/Reshot.Recording` | MP4 and M4A through Media Foundation and NAudio, no ffmpeg |
+| `src/Reshot.Recording` | MP4 and M4A through the bundled ffmpeg and NAudio |
 | `src/reshot-tauri` | Settings window: Tauri 2, Rust, TypeScript |
 | `tests/Reshot.Core.Tests` | Core unit tests (xUnit) |
 

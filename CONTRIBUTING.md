@@ -17,8 +17,8 @@ dotnet run --project src/Reshot.App
 | Project | Purpose |
 |---|---|
 | `src/Reshot.Core` | The core, **with no UI**: document model, history, settings, hotkeys |
-| `src/Reshot.Capture` | The only place Windows.Graphics.Capture lives |
-| `src/Reshot.Recording` | MP4 and M4A through Media Foundation and NAudio |
+| `src/Reshot.Capture` | The only place Windows.Graphics.Capture and Desktop Duplication live |
+| `src/Reshot.Recording` | MP4 and M4A through the bundled ffmpeg and NAudio |
 | `src/Reshot.App` | WPF shell: tray, overlay, OCR, export |
 | `src/reshot-tauri` | Settings window: Tauri 2, Rust, TypeScript |
 
@@ -26,9 +26,11 @@ Boundaries worth keeping:
 
 1. **`Reshot.Core` knows nothing about WPF.** That is what lets the document model, the
    history and the settings be unit tested without any windows.
-2. **Windows.Graphics.Capture lives only in `Reshot.Capture`.** The rest of the code sees
-   the `IScreenCaptureService` interface.
-3. **`settings.json` is shared** between the C# app and the settings window. Write it by
+2. **Windows.Graphics.Capture and Desktop Duplication live only in `Reshot.Capture`.**
+   The rest of the code sees the `IScreenCaptureService` interface.
+3. **Everything that talks to ffmpeg lives in `Reshot.Recording`.** The rest of the app
+   never builds an ffmpeg command line.
+4. **`settings.json` is shared** between the C# app and the settings window. Write it by
    merging, otherwise one side wipes keys belonging to the other.
 
 ## Style

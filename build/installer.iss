@@ -4,8 +4,8 @@
 ; staged payload in:
 ;   ISCC.exe installer.iss /DAppVersion=1.0.0 /DPayloadDir=..\dist\reshot /DOutputDir=..\dist
 ;
-; The payload is the published, self-contained app plus reshot-tauri.exe (the settings
-; window), which must stay next to reshot.exe, that is where the app looks for it first.
+; The payload is the published, self-contained app, reshot-tauri.exe (the settings window),
+; and the pinned GPL ffmpeg.exe. All three must stay next to reshot.exe.
 
 #ifndef AppVersion
   #define AppVersion "1.0.0"
@@ -15,6 +15,11 @@
 #endif
 #ifndef OutputDir
   #define OutputDir "..\dist"
+#endif
+; The wizard's info page renders plain text, so it gets the generated .txt rendering of
+; THIRD-PARTY-NOTICES.md rather than the Markdown source, which would show raw syntax.
+#ifndef NoticeFile
+  #define NoticeFile "..\dist\THIRD-PARTY-NOTICES.txt"
 #endif
 
 #define AppName      "Reshot"
@@ -57,6 +62,7 @@ Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
 LicenseFile=..\LICENSE
+InfoBeforeFile={#NoticeFile}
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -66,7 +72,9 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Name: "autostart"; Description: "Start Reshot when Windows starts"; GroupDescription: "Startup:"
 
 [Files]
-Source: "{#PayloadDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Keep this explicit so the GPL binary is installed beside reshot.exe and tracked for uninstall.
+Source: "{#PayloadDir}\ffmpeg.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#PayloadDir}\*"; DestDir: "{app}"; Excludes: "ffmpeg.exe"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExe}"
